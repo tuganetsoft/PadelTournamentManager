@@ -76,6 +76,34 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
   const handleDragEnd = () => {
     setIsDragging(false);
   };
+  
+  const handleUnscheduleMatch = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove("highlight");
+    
+    if (draggedMatch && draggedMatch.scheduledTime) {
+      try {
+        // Optimistic UI update
+        // Remove from scheduled matches
+        setScheduledMatches(prev => prev.filter(m => m.id !== draggedMatch.id));
+        
+        // Add to unscheduled matches
+        setUnscheduledMatches(prev => [...prev, { ...draggedMatch, scheduledTime: null, courtId: null }]);
+        
+        // Call API to unschedule
+        unscheduleMutation.mutate({
+          matchId: draggedMatch.id
+        });
+      } catch (error) {
+        console.error("Error unscheduling match:", error);
+        toast({
+          title: "Error unscheduling match",
+          description: "There was a problem removing the match from the schedule",
+          variant: "destructive"
+        });
+      }
+    }
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -96,38 +124,67 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
       e.currentTarget.classList.remove("highlight");
       
       if (draggedMatch) {
-        // Create a new scheduled version of the match
-        const scheduledTime = new Date(selectedDate);
-        const [hours, minutes] = time.split(":");
-        scheduledTime.setHours(parseInt(hours, 10));
-        scheduledTime.setMinutes(parseInt(minutes, 10));
-        
-        // Update UI optimistically
-        const updatedMatch = { 
-          ...draggedMatch, 
-          courtId, 
-          scheduledTime: scheduledTime.toISOString() 
-        };
-        
-        setScheduledMatches(prev => [...prev, updatedMatch]);
-        setUnscheduledMatches(prev => prev.filter(m => m.id !== draggedMatch.id));
-        
-        // Queue update to the schedule
-        scheduleMutation.mutate({
-          matchId: draggedMatch.id,
-          courtId,
-          scheduledTime: scheduledTime.toISOString()
-        });
+        try {
+          // Create a new scheduled version of the match
+          const scheduledTime = new Date(selectedDate);
+          const [hours, minutes] = time.split(":");
+          scheduledTime.setHours(parseInt(hours, 10));
+          scheduledTime.setMinutes(parseInt(minutes, 10));
+          
+          // Update UI optimistically
+          const updatedMatch = { 
+            ...draggedMatch, 
+            courtId, 
+            scheduledTime: scheduledTime.toISOString() 
+          };
+          
+          // If this match was already scheduled somewhere else, remove it from scheduled matches
+          setScheduledMatches(prev => {
+            const filteredMatches = prev.filter(m => m.id !== draggedMatch.id);
+            return [...filteredMatches, updatedMatch];
+          });
+          
+          // If this was an unscheduled match, remove it from unscheduled matches
+          if (!draggedMatch.scheduledTime) {
+            setUnscheduledMatches(prev => prev.filter(m => m.id !== draggedMatch.id));
+          }
+          
+          // Queue update to the schedule
+          scheduleMutation.mutate({
+            matchId: draggedMatch.id,
+            courtId: courtId,
+            scheduledTime: scheduledTime.toISOString()
+          });
+        } catch (error) {
+          console.error("Error in handleDrop:", error);
+          toast({
+            title: "Error processing drop action",
+            description: "There was a problem scheduling the match",
+            variant: "destructive"
+          });
+        }
       }
     }
   };
 
   const scheduleMutation = useMutation({
     mutationFn: async (scheduleData: { matchId: number; courtId: number; scheduledTime: string }) => {
-      return await apiRequest("PATCH", `/api/matches/${scheduleData.matchId}`, {
-        courtId: scheduleData.courtId,
-        scheduledTime: scheduleData.scheduledTime
-      });
+      try {
+        // Ensure the scheduledTime is a valid ISO string
+        if (typeof scheduleData.scheduledTime !== 'string') {
+          throw new Error('Invalid date format');
+        }
+        
+        const response = await apiRequest("PATCH", `/api/matches/${scheduleData.matchId}`, {
+          courtId: scheduleData.courtId,
+          scheduledTime: scheduleData.scheduledTime
+        });
+        
+        return response;
+      } catch (err) {
+        console.error("Mutation error:", err);
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournament.id}/details`] });
@@ -137,13 +194,42 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
       });
     },
     onError: (error: Error) => {
+      console.log("Scheduling error:", error);
       toast({
         title: "Error scheduling match",
-        description: error.message,
+        description: "The match couldn't be scheduled, but it's in the queue. Save to apply changes.",
         variant: "destructive"
       });
-      // Revert optimistic update
+      // Don't invalidate the query to keep the UI optimistic update
+      // The save button can be used to persist changes
+    }
+  });
+
+  const unscheduleMutation = useMutation({
+    mutationFn: async ({ matchId }: { matchId: number }) => {
+      try {
+        return await apiRequest("PATCH", `/api/matches/${matchId}`, {
+          courtId: null,
+          scheduledTime: null
+        });
+      } catch (err) {
+        console.error("Unschedule mutation error:", err);
+        throw err;
+      }
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournament.id}/details`] });
+      toast({
+        title: "Match unscheduled",
+        description: "The match has been moved to unscheduled matches."
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error unscheduling match",
+        description: "The match couldn't be unscheduled, but it's in the queue. Save to apply changes.",
+        variant: "destructive"
+      });
     }
   });
 
@@ -272,7 +358,15 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
                       <div 
                         key={`${court.id}-${slot}`}
                         ref={el => dropzonesRef.current[`${court.id}-${slot}`] = el}
-                        className="h-24 border-b border-neutral-light dropzone"
+                        className={`
+                          h-24 dropzone
+                          ${slot === '12:00' ? 'border-t-2 border-t-orange-400' : 'border-t border-neutral-light'}
+                          ${slot === '13:00' || slot === '14:00' ? 'border-b-2 border-b-orange-400' : 'border-b border-neutral-light'}
+                          ${venue.courts.indexOf(court) === 0 ? 'border-l-2 border-l-blue-400' : ''}
+                          ${venue.courts.indexOf(court) === venue.courts.length - 1 ? 'border-r-2 border-r-blue-400' : ''}
+                          ${timeSlots.indexOf(slot) % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                          ${isDragging ? 'bg-blue-50' : ''}
+                        `}
                         data-court={court.id}
                         data-time={slot}
                         onDragOver={handleDragOver}
@@ -285,6 +379,9 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
                               <div 
                                 key={match.id} 
                                 className="h-full w-full flex items-center justify-center"
+                                draggable="true"
+                                onDragStart={() => handleDragStart(match)}
+                                onDragEnd={handleDragEnd}
                               >
                                 <MatchCard match={match} />
                               </div>
@@ -306,6 +403,22 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
         <h3 className="text-lg font-medium text-neutral-dark mb-4">Unscheduled Matches</h3>
         <div className="space-y-2">
           <p className="text-sm text-neutral-dark mb-2">Drag matches to schedule them on the calendar</p>
+          
+          {/* Unschedule Drop Area */}
+          <div 
+            className="border-2 border-dashed border-gray-300 rounded-md p-4 mb-4 flex items-center justify-center dropzone"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleUnscheduleMatch(e)}
+          >
+            <div className="text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto h-8 w-8 text-gray-400 mb-2">
+                <rect width="18" height="18" x="3" y="3" rx="2" />
+                <path d="M8 12h8" />
+              </svg>
+              <span className="text-sm text-gray-500 font-medium">Drop here to unschedule a match</span>
+            </div>
+          </div>
           
           {unscheduledMatches.length === 0 ? (
             <p className="text-sm text-neutral-dark py-4 text-center">No unscheduled matches found for the selected criteria.</p>
