@@ -403,6 +403,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Save team assignments (Confirm button)
+  app.post("/api/categories/:id/save-assignments", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).send("Invalid ID");
+    
+    try {
+      // Get category
+      const category = await storage.getCategory(id);
+      if (!category) return res.status(404).send("Category not found");
+      
+      // Check if user owns the tournament
+      const tournament = await storage.getTournament(category.tournamentId);
+      if (tournament.userId !== req.user.id) {
+        return res.status(403).send("Not authorized to manage this category");
+      }
+      
+      // This endpoint is just a confirmation step - the actual changes have already been
+      // made by individual API calls (add/remove/move team assignments)
+      // It serves as a definitive "save" to confirm all the changes are final
+      
+      return res.status(200).json({ success: true, message: "Team assignments saved" });
+    } catch (error) {
+      console.error("Error saving team assignments:", error);
+      res.status(500).json({ error: "Failed to save team assignments" });
+    }
+  });
+
   // Auto-assign teams to groups
   app.post("/api/categories/:id/auto-assign-teams", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");

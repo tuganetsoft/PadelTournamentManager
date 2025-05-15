@@ -1520,6 +1520,21 @@ export default function CategoryDetail() {
                             ))}
                           </div>
                           
+                          {/* Debug output */}
+                          <div className="text-xs text-muted-foreground mb-4 flex items-center gap-2">
+                            <span>hasUnsavedChanges: {hasUnsavedChanges ? "true" : "false"}</span>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => {
+                                console.log("Setting hasUnsavedChanges to true");
+                                setHasUnsavedChanges(true);
+                              }}
+                            >
+                              Toggle Flag
+                            </Button>
+                          </div>
+                          
                           {/* Save confirmation button */}
                           {hasUnsavedChanges && (
                             <div className="flex justify-center mt-8">
