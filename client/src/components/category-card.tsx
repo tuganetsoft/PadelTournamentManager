@@ -7,7 +7,14 @@ type CategoryCardProps = {
     name: string;
     format: string;
     status: string;
-    teams: any[];
+    teams: {
+      id: number;
+      name: string;
+      player1?: string;
+      player2?: string;
+      seeded?: boolean;
+      categoryId: number;
+    }[];
     matches: any[];
     tournamentId?: number;
   };

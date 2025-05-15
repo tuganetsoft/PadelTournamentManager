@@ -499,7 +499,24 @@ export default function TournamentDetail() {
                           key={team.id} 
                           className="bg-neutral-50 rounded-lg p-4 border border-neutral-200"
                         >
-                          <div className="font-medium mb-1">{team.name}</div>
+                          <div className="flex justify-between items-center mb-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{team.name}</span>
+                              {team.seeded && (
+                                <div className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded-full">
+                                  Seeded
+                                </div>
+                              )}
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7"
+                              onClick={() => navigate(`/categories/${category.id}`)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
                           <div className="text-sm text-neutral-dark">
                             {team.player1} {team.player2 ? `/ ${team.player2}` : ""}
                           </div>
