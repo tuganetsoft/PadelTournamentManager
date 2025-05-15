@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategoryCard } from "@/components/category-card";
 import { CategoryForm } from "@/components/category-form";
 import { TeamForm } from "@/components/team-form";
+import { TeamEditForm } from "@/components/team-edit-form";
 import { VenueForm } from "@/components/venue-form";
 import { CourtForm } from "@/components/court-form";
 import { ScheduleCalendar } from "@/components/schedule-calendar";
@@ -508,14 +509,18 @@ export default function TournamentDetail() {
                                 </div>
                               )}
                             </div>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-7 w-7"
-                              onClick={() => navigate(`/tournaments/${id}/categories/${category.id}`)}
+                            <TeamEditForm
+                              team={team}
+                              tournamentId={Number(id)}
                             >
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-7 w-7"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TeamEditForm>
                           </div>
                           <div className="text-sm text-neutral-dark">
                             {team.player1} {team.player2 ? `/ ${team.player2}` : ""}
