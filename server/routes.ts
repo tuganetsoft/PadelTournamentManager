@@ -445,12 +445,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "All teams are already assigned" });
       }
       
-      // Shuffle teams randomly
-      const shuffledTeams = [...unassignedTeams].sort(() => Math.random() - 0.5);
+      // Separate seeded and non-seeded teams
+      const seededTeams = unassignedTeams.filter(team => team.seeded);
+      const nonSeededTeams = unassignedTeams.filter(team => !team.seeded);
       
-      // Distribute teams evenly
-      for (let i = 0; i < shuffledTeams.length; i++) {
-        const team = shuffledTeams[i];
+      // Shuffle each group of teams randomly
+      const shuffledSeededTeams = [...seededTeams].sort(() => Math.random() - 0.5);
+      const shuffledNonSeededTeams = [...nonSeededTeams].sort(() => Math.random() - 0.5);
+      
+      // Distribute seeded teams first (ensuring they are evenly distributed)
+      for (let i = 0; i < shuffledSeededTeams.length; i++) {
+        const team = shuffledSeededTeams[i];
+        const groupIndex = i % groups.length;
+        const group = groups[groupIndex];
+        
+        await storage.createGroupAssignment({
+          groupId: group.id,
+          teamId: team.id,
+          played: 0,
+          won: 0,
+          lost: 0,
+          points: 0
+        });
+      }
+      
+      // Then distribute non-seeded teams
+      for (let i = 0; i < shuffledNonSeededTeams.length; i++) {
+        const team = shuffledNonSeededTeams[i];
         const groupIndex = i % groups.length;
         const group = groups[groupIndex];
         
