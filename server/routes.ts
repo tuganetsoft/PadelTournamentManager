@@ -492,6 +492,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Save team assignments (finalizes all temporary assignments)
+  app.post("/api/categories/:id/save-assignments", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).send("Invalid ID");
+    
+    try {
+      // Get category
+      const category = await storage.getCategory(id);
+      if (!category) return res.status(404).send("Category not found");
+      
+      // Check if user owns the tournament
+      const tournament = await storage.getTournament(category.tournamentId);
+      if (tournament.userId !== req.user.id) {
+        return res.status(403).send("Not authorized to manage this category");
+      }
+      
+      // Get all groups for this category
+      const groups = await storage.getGroupsByCategoryId(id);
+      
+      // Nothing to do if no groups
+      if (groups.length === 0) {
+        return res.status(200).json({ success: true, message: "No groups to save" });
+      }
+      
+      // For each group, get assignments and finalize any temporary ones
+      let changesCount = 0;
+      
+      for (const group of groups) {
+        const assignments = await storage.getGroupAssignmentsByGroupId(group.id);
+        
+        // Process temporary assignments (those with negative IDs)
+        for (const assignment of assignments) {
+          if (assignment.id < 0) {
+            // Create a permanent assignment
+            await storage.createGroupAssignment({
+              groupId: assignment.groupId,
+              teamId: assignment.teamId,
+              played: assignment.played,
+              won: assignment.won,
+              lost: assignment.lost,
+              points: assignment.points
+            });
+            
+            // Delete the temporary assignment
+            await storage.deleteGroupAssignment(assignment.id);
+            changesCount++;
+          }
+        }
+      }
+      
+      res.status(200).json({ 
+        success: true, 
+        message: changesCount > 0 
+          ? `Saved ${changesCount} team assignments` 
+          : "No changes to save" 
+      });
+    } catch (error) {
+      console.error("Error saving team assignments:", error);
+      res.status(500).json({ error: "Failed to save team assignments" });
+    }
+  });
+  
   // Generate matches for category
   app.post("/api/categories/:id/generate-matches", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");

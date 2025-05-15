@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, ArrowLeft, Edit, PlusCircle, Trash, Users, UserPlus, UserMinus, Loader2, GitBranch, FileText, Layers } from "lucide-react";
+import { AlertCircle, ArrowLeft, Edit, PlusCircle, Trash, Users, UserPlus, UserMinus, Loader2, GitBranch, FileText, Layers, Save } from "lucide-react";
 import { TeamForm } from "@/components/team-form";
 import { TeamEditForm } from "@/components/team-edit-form";
 import { EliminationBracket } from "@/components/elimination-bracket";
