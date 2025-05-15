@@ -1432,7 +1432,14 @@ export default function CategoryDetail() {
                     <CardContent>
                       {category.groups.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
-                          No groups created yet
+                          <p className="mb-6">No groups created yet</p>
+                          <Button 
+                            onClick={() => setCreateGroupsOpen(true)}
+                            size="lg"
+                          >
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Create Groups
+                          </Button>
                         </div>
                       ) : (
                         <DndContext
