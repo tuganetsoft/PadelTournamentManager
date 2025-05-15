@@ -35,8 +35,16 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
     "21:00", "21:30", "22:00"
   ];
 
+  // Extract all matches from all categories
+  const allMatches = tournament?.categories?.flatMap((category: any) => 
+    category.matches.map((match: any) => ({
+      ...match,
+      categoryName: category.name // Add category name for display
+    }))
+  ) || [];
+  
   // Get all matches scheduled for the selected date
-  const scheduledMatches = tournament?.matches?.filter((match: any) => {
+  const scheduledMatches = allMatches.filter((match: any) => {
     if (!match.scheduledTime) return false;
     try {
       const matchDate = parseISO(match.scheduledTime);
@@ -45,12 +53,12 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
       console.error("Invalid date format:", match.scheduledTime);
       return false;
     }
-  }) || [];
+  });
 
   // Unscheduled matches are those that don't have a scheduledTime or courtId
-  const unscheduledMatches = tournament?.matches?.filter((match: any) => 
+  const unscheduledMatches = allMatches.filter((match: any) => 
     !match.scheduledTime || !match.courtId
-  ) || [];
+  );
 
   // Simple color generator based on courtId
   const getCourtColor = (courtId: number) => {
