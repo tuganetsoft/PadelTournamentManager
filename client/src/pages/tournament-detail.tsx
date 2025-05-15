@@ -293,6 +293,7 @@ export default function TournamentDetail() {
               <TabsTrigger 
                 value="schedule"
                 className="data-[state=active]:border-primary data-[state=active]:text-primary border-b-2 border-transparent py-4 px-1 font-medium text-sm"
+                disabled={!tournament?.venues || tournament.venues.length === 0}
               >
                 Schedule
               </TabsTrigger>
@@ -458,12 +459,31 @@ export default function TournamentDetail() {
 
           <TabsContent value="schedule" className="mt-0">
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <ScheduleCalendar 
-                tournament={tournament}
-                venues={tournament.venues || []}
-                startDate={new Date(tournament.startDate)}
-                endDate={new Date(tournament.endDate)}
-              />
+              {tournament.venues && tournament.venues.length > 0 ? (
+                <ScheduleCalendar 
+                  tournament={tournament}
+                  venues={tournament.venues}
+                  startDate={new Date(tournament.startDate)}
+                  endDate={new Date(tournament.endDate)}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <div className="rounded-full bg-primary/10 p-3 mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary h-6 w-6">
+                      <rect width="18" height="18" x="3" y="3" rx="2" />
+                      <path d="M21 9H3" />
+                      <path d="M8 3v18" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium mb-2">No Venues Available</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mb-4">
+                    You need to create at least one venue with courts to use the scheduling feature.
+                  </p>
+                  <Button onClick={() => setActiveTab("venue")}>
+                    Add Venue
+                  </Button>
+                </div>
+              )}
             </div>
           </TabsContent>
 

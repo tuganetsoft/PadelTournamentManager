@@ -347,7 +347,25 @@ export default function CategoryDetail() {
       });
       createGroupsForm.reset();
       setCreateGroupsOpen(false);
+      // Refetch category details data
       queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      // Also refresh any list that might show this category
+      queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/details`] });
+      // Force UI update
+      setTimeout(() => {
+        if (category) {
+          const groupCount = parseInt(createGroupsForm.getValues().groupCount, 10);
+          setGroupsWithTeams(prevGroups => [
+            ...prevGroups, 
+            ...Array.from({ length: groupCount }, (_, i) => ({
+              id: -1 * (i + 1), // Temporary ID until refresh
+              name: `Group ${String.fromCharCode(65 + prevGroups.length + i)}`,
+              categoryId: Number(id),
+              assignments: [],
+            }))
+          ]);
+        }
+      }, 100);
     },
     onError: (error: Error) => {
       toast({
@@ -369,7 +387,10 @@ export default function CategoryDetail() {
         title: "Teams assigned",
         description: "Teams have been automatically assigned to groups",
       });
+      // Refetch category details data
       queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      // Also refresh any list that might show this category
+      queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/details`] });
     },
     onError: (error: Error) => {
       toast({
@@ -396,7 +417,20 @@ export default function CategoryDetail() {
       });
       generateMatchesForm.reset();
       setGenerateMatchesOpen(false);
+      // Refetch category details data
       queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      // Also refresh any list that might show this category
+      queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/details`] });
+      // Force update in the UI by refetching group and match data
+      setTimeout(() => {
+        if (category) {
+          const unassigned = category.teams.filter(
+            team => !category.groups.flatMap(g => g.assignments.map(a => a.teamId)).includes(team.id)
+          );
+          setUnassignedTeams(unassigned);
+          setGroupsWithTeams(category.groups);
+        }
+      }, 500);
     },
     onError: (error: Error) => {
       toast({
@@ -444,6 +478,39 @@ export default function CategoryDetail() {
   // Assign team to group
   const assignTeamToGroup = async (teamId: number, groupId: number) => {
     try {
+      // Optimistic UI update before the API call completes
+      const teamToMove = unassignedTeams.find(team => team.id === teamId);
+      if (teamToMove) {
+        // Remove from unassigned teams
+        setUnassignedTeams(prev => prev.filter(team => team.id !== teamId));
+        
+        // Add to the target group
+        setGroupsWithTeams(prev => {
+          return prev.map(group => {
+            if (group.id === groupId) {
+              return {
+                ...group,
+                assignments: [
+                  ...group.assignments,
+                  {
+                    id: -1, // Temporary ID until refresh
+                    groupId,
+                    teamId,
+                    played: 0,
+                    won: 0,
+                    lost: 0,
+                    points: 0,
+                    team: teamToMove
+                  }
+                ]
+              };
+            }
+            return group;
+          });
+        });
+      }
+      
+      // Make the actual API call
       await apiRequest("POST", "/api/group-assignments", {
         groupId,
         teamId,
@@ -453,13 +520,18 @@ export default function CategoryDetail() {
         points: 0,
       });
       
+      // Update the data after successful assignment
       queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/details`] });
       
       toast({
         title: "Team assigned",
         description: "Team has been assigned to the group",
       });
     } catch (error: any) {
+      // Revert optimistic update in case of error
+      queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      
       toast({
         title: "Error assigning team",
         description: error.message,
@@ -551,7 +623,11 @@ export default function CategoryDetail() {
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground">Format</h3>
-                    <p>{GameFormats[category.format]}</p>
+                    <p>{category.format === "GROUPS" 
+                        ? "Groups" 
+                        : category.format === "SINGLE_ELIMINATION" 
+                            ? "Single Elimination" 
+                            : "Groups & Elimination"}</p>
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground">Match Duration</h3>
@@ -559,7 +635,11 @@ export default function CategoryDetail() {
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
-                    <p>{CategoryStatus[category.status]}</p>
+                    <p>{category.status === "REGISTRATION_OPEN" 
+                        ? "Registration Open" 
+                        : category.status === "ACTIVE" 
+                            ? "Active" 
+                            : "Completed"}</p>
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground">Teams</h3>
