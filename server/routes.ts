@@ -674,6 +674,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ error: error.message });
     }
   });
+  
+  // Update team
+  app.patch("/api/teams/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).send("Invalid ID");
+    
+    try {
+      // Get the team
+      const team = await storage.getTeam(id);
+      if (!team) return res.status(404).send("Team not found");
+      
+      // Get the category and tournament to check ownership
+      const category = await storage.getCategory(team.categoryId);
+      if (!category) return res.status(404).send("Category not found");
+      
+      const tournament = await storage.getTournament(category.tournamentId);
+      if (!tournament) return res.status(404).send("Tournament not found");
+      
+      // Check if user owns the tournament
+      if (tournament.userId !== req.user.id) {
+        return res.status(403).send("Not authorized to update this team");
+      }
+      
+      // Update the team
+      const updatedTeam = await storage.updateTeam(id, req.body);
+      res.json(updatedTeam);
+    } catch (error) {
+      console.error("Error updating team:", error);
+      res.status(500).json({ error: "Failed to update team" });
+    }
+  });
 
   // GROUPS
   

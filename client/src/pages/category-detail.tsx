@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { 
   Form, 
   FormControl, 
@@ -235,6 +236,24 @@ export default function CategoryDetail() {
   } = useQuery<CategoryDetail>({
     queryKey: [`/api/categories/${id}/details`],
     enabled: !!id,
+  });
+  
+  // Toggle team seeded status
+  const toggleSeededMutation = useMutation({
+    mutationFn: async ({ teamId, seeded }: { teamId: number; seeded: boolean }) => {
+      await apiRequest("PATCH", `/api/teams/${teamId}`, { seeded });
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error updating team",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   });
 
   // Fetch tournament details
@@ -735,6 +754,28 @@ export default function CategoryDetail() {
                               {!team.player1 && !team.player2 && (
                                 <div>No players assigned</div>
                               )}
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                <Switch 
+                                  id={`team-seeded-${team.id}`}
+                                  checked={team.seeded || false}
+                                  onCheckedChange={(checked) => {
+                                    toggleSeededMutation.mutate({ 
+                                      teamId: team.id, 
+                                      seeded: checked 
+                                    });
+                                  }}
+                                  disabled={toggleSeededMutation.isPending}
+                                />
+                                <label 
+                                  htmlFor={`team-seeded-${team.id}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                  Seeded team
+                                </label>
+                              </div>
+                              {toggleSeededMutation.isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                             </div>
                           </div>
                         ))}
