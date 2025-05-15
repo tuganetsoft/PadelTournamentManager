@@ -1502,6 +1502,9 @@ export default function CategoryDetail() {
                                             group.id, 
                                             assignment.id
                                           );
+                                          // Explicitly set unsaved changes flag
+                                          setHasUnsavedChanges(true);
+                                          console.log("Team removed, setting hasUnsavedChanges to true");
                                         }}
                                       />
                                     ))}
