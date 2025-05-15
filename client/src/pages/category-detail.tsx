@@ -3,7 +3,6 @@ import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { useGroupState } from "@/hooks/use-group-state";
 import { 
   Card, 
   CardContent, 
@@ -358,13 +357,15 @@ function GroupTeamCard({
 
 export default function CategoryDetail() {
   const { id, tournamentId } = useParams();
-  const categoryId = parseInt(id as string);
   const [, navigate] = useLocation();
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("teams");
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [createGroupsOpen, setCreateGroupsOpen] = useState(false);
   const [generateMatchesOpen, setGenerateMatchesOpen] = useState(false);
+  const [unassignedTeams, setUnassignedTeams] = useState<any[]>([]);
+  const [groupsWithTeams, setGroupsWithTeams] = useState<any[]>([]);
   
   // Setup DnD sensors
   const sensors = useSensors(
@@ -431,8 +432,37 @@ export default function CategoryDetail() {
   // Save team assignments mutation
   const saveTeamAssignmentsMutation = useMutation({
     mutationFn: async () => {
-      // Use our custom hook to save assignments
-      return await saveAssignments();
+      console.log("Saving team assignments...");
+      
+      // Collect current assignments from all groups
+      const currentAssignments: { teamId: number; groupId: number }[] = [];
+      
+      // If we have category data with groups, collect all current assignments
+      if (category?.groups) {
+        category.groups.forEach(group => {
+          group.assignments.forEach(assignment => {
+            currentAssignments.push({
+              teamId: assignment.teamId,
+              groupId: group.id
+            });
+          });
+        });
+      }
+      
+      console.log("Current assignments to save:", currentAssignments);
+      
+      // Send the current assignments to the server
+      const res = await apiRequest(
+        "POST", 
+        `/api/categories/${id}/save-assignments`,
+        { assignments: currentAssignments }
+      );
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to save team assignments");
+      }
+      return await res.json();
     },
     onSuccess: (data) => {
       console.log("Team assignments saved successfully:", data);
@@ -441,7 +471,11 @@ export default function CategoryDetail() {
         description: "All team assignments have been saved successfully",
       });
       
-      // The hook already handles refreshing the data
+      // Reset UI state
+      setHasUnsavedChanges(false);
+      
+      // Refresh the data
+      queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
     },
     onError: (error: Error) => {
       console.error("Error saving assignments:", error);
@@ -576,8 +610,8 @@ export default function CategoryDetail() {
   // Auto-assign teams to groups mutation
   const autoAssignTeamsMutation = useMutation({
     mutationFn: async () => {
-      // Use our hook's autoAssignTeams method to handle team assignment
-      return await autoAssignTeams();
+      const response = await apiRequest("POST", `/api/categories/${id}/auto-assign-teams`, {});
+      return await response.json();
     },
     onSuccess: () => {
       toast({
@@ -585,8 +619,71 @@ export default function CategoryDetail() {
         description: "Teams have been automatically assigned to groups",
       });
       
-      // Our hook already handles refreshing the queries
-    }
+      // Optimistic UI update to show teams as assigned
+      // Move all unassigned teams to groups (rough estimation since we don't know exact group assignment)
+      if (category && groupsWithTeams.length > 0) {
+        const teams = [...unassignedTeams];
+        setUnassignedTeams([]); // Clear unassigned teams
+        
+        // Distribute teams evenly across groups (not the real algorithm but a visual estimation)
+        const updatedGroups = [...groupsWithTeams];
+        let groupIndex = 0;
+        
+        // First assign seeded teams
+        const seededTeams = teams.filter(team => team.seeded);
+        for (const team of seededTeams) {
+          if (groupIndex >= updatedGroups.length) groupIndex = 0;
+          
+          updatedGroups[groupIndex] = {
+            ...updatedGroups[groupIndex],
+            assignments: [
+              ...updatedGroups[groupIndex].assignments,
+              {
+                id: -1, // Temporary ID
+                groupId: updatedGroups[groupIndex].id,
+                teamId: team.id,
+                played: 0,
+                won: 0,
+                lost: 0,
+                points: 0,
+                team: team
+              }
+            ]
+          };
+          groupIndex++;
+        }
+        
+        // Then assign non-seeded teams
+        const nonSeededTeams = teams.filter(team => !team.seeded);
+        for (const team of nonSeededTeams) {
+          if (groupIndex >= updatedGroups.length) groupIndex = 0;
+          
+          updatedGroups[groupIndex] = {
+            ...updatedGroups[groupIndex],
+            assignments: [
+              ...updatedGroups[groupIndex].assignments,
+              {
+                id: -1, // Temporary ID
+                groupId: updatedGroups[groupIndex].id,
+                teamId: team.id,
+                played: 0,
+                won: 0,
+                lost: 0,
+                points: 0,
+                team: team
+              }
+            ]
+          };
+          groupIndex++;
+        }
+        
+        setGroupsWithTeams(updatedGroups);
+      }
+      
+      // Refetch category details data
+      queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      // Also refresh any list that might show this category
+      queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/details`] });
     },
     onError: (error: Error) => {
       toast({
@@ -646,24 +743,24 @@ export default function CategoryDetail() {
     }
   });
 
-  // Use our custom group state manager
-  const {
-    groups: groupsWithTeams,
-    unassignedTeams,
-    hasUnsavedChanges,
-    assignTeam,
-    removeTeam,
-    moveTeam,
-    saveAssignments,
-    autoAssignTeams,
-    resetAssignments
-  } = useGroupState(
-    categoryId,
-    category ? category.groups : [],
-    category ? category.teams : []
-  );
+  // Prepare teams and groups data for drag-and-drop interface
+  useEffect(() => {
+    if (category) {
+      // Get all teams that are not assigned to any group
+      const assignedTeamIds = category.groups.flatMap(g => 
+        g.assignments.map(a => a.teamId)
+      );
+      
+      const unassigned = category.teams.filter(
+        team => !assignedTeamIds.includes(team.id)
+      );
 
-  // Handle drag end for team assignment using our new hook
+      setUnassignedTeams(unassigned);
+      setGroupsWithTeams(category.groups);
+    }
+  }, [category]);
+
+  // Handle drag end for team assignment
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
@@ -674,19 +771,21 @@ export default function CategoryDetail() {
     // Check if dropping in unassigned teams area
     if (over.id === 'unassigned-teams') {
       // Find which group the team is coming from
-      let sourceGroupId: number | null = null;
+      let sourceGroup: any = null;
+      let sourceAssignment: any = null;
       
       for (const group of groupsWithTeams) {
-        const assignment = group.assignments.find(a => a.teamId === teamId);
+        const assignment = group.assignments.find((a: any) => a.teamId === teamId);
         if (assignment) {
-          sourceGroupId = group.id;
+          sourceGroup = group;
+          sourceAssignment = assignment;
           break;
         }
       }
       
-      if (sourceGroupId) {
-        // Move team back to unassigned using our hook
-        removeTeam(teamId, sourceGroupId);
+      if (sourceGroup && sourceAssignment) {
+        // Move team back to unassigned
+        removeTeamFromGroup(teamId, sourceGroup.id, sourceAssignment.id);
       }
       return;
     }
@@ -698,28 +797,26 @@ export default function CategoryDetail() {
     
     if (targetGroupId) {
       // Check if team is coming from another group
-      let sourceGroupId: number | null = null;
+      let sourceGroup: any = null;
+      let sourceAssignment: any = null;
       
       for (const group of groupsWithTeams) {
         if (group.id === targetGroupId) continue; // Skip target group
         
-        const assignment = group.assignments.find(a => a.teamId === teamId);
+        const assignment = group.assignments.find((a: any) => a.teamId === teamId);
         if (assignment) {
-          sourceGroupId = group.id;
+          sourceGroup = group;
+          sourceAssignment = assignment;
           break;
         }
       }
       
-      if (sourceGroupId) {
-        // Move from one group to another using our hook
-        moveTeam(teamId, sourceGroupId, targetGroupId);
+      if (sourceGroup && sourceAssignment) {
+        // Move team from one group to another
+        moveTeamBetweenGroups(teamId, sourceGroup.id, targetGroupId, sourceAssignment.id);
       } else {
-        // Check if team is coming from unassigned teams
-        const team = unassignedTeams.find(t => t.id === teamId);
-        if (team) {
-          // Assign unassigned team to group using our hook
-          assignTeam(teamId, targetGroupId);
-        }
+        // Assign team from unassigned to a group
+        assignTeamToGroup(teamId, targetGroupId);
       }
     }
   };
