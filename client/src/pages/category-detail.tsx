@@ -73,23 +73,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  DndContext, 
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  arrayMove,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+// DND imports removed
 
 // Type for Category Details
 interface CategoryDetail {
@@ -187,49 +171,7 @@ type Team = {
   seeded?: boolean;
 };
 
-// Sortable Team Item component for drag and drop (kept for backward compatibility)
-function SortableTeamItem({ team, groupId }: { team: Team, groupId?: number }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: team.id.toString() });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div 
-      ref={setNodeRef} 
-      style={style} 
-      className="border border-border rounded-md p-3 mb-2 bg-white cursor-grab"
-      {...attributes} 
-      {...listeners}
-    >
-      <div className="flex justify-between items-center">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{team.name}</span>
-            {team.seeded && (
-              <div className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded-full">
-                Seeded
-              </div>
-            )}
-          </div>
-          {team.player1 && <div className="text-sm text-muted-foreground">{team.player1}</div>}
-          {team.player2 && <div className="text-sm text-muted-foreground">{team.player2}</div>}
-        </div>
-        {groupId && (
-          <div className="text-sm font-medium text-primary">Group {groupId}</div>
-        )}
-      </div>
-    </div>
-  );
-}
+// DnD component removed
 
 // Simple team component without complex dependencies
 function TeamCard({
@@ -367,13 +309,7 @@ export default function CategoryDetail() {
   const [unassignedTeams, setUnassignedTeams] = useState<any[]>([]);
   const [groupsWithTeams, setGroupsWithTeams] = useState<any[]>([]);
   
-  // Setup DnD sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  // DnD sensors removed
 
   // Fetch category details
   const {
@@ -761,65 +697,7 @@ export default function CategoryDetail() {
   }, [category]);
 
   // Handle drag end for team assignment
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (!over) return;
-    
-    const teamId = parseInt(active.id.toString());
-    
-    // Check if dropping in unassigned teams area
-    if (over.id === 'unassigned-teams') {
-      // Find which group the team is coming from
-      let sourceGroup: any = null;
-      let sourceAssignment: any = null;
-      
-      for (const group of groupsWithTeams) {
-        const assignment = group.assignments.find((a: any) => a.teamId === teamId);
-        if (assignment) {
-          sourceGroup = group;
-          sourceAssignment = assignment;
-          break;
-        }
-      }
-      
-      if (sourceGroup && sourceAssignment) {
-        // Move team back to unassigned
-        removeTeamFromGroup(teamId, sourceGroup.id, sourceAssignment.id);
-      }
-      return;
-    }
-    
-    // Check if dropping in a group
-    const targetGroupId = over.id.toString().startsWith('group-') 
-      ? parseInt(over.id.toString().replace('group-', ''))
-      : null;
-    
-    if (targetGroupId) {
-      // Check if team is coming from another group
-      let sourceGroup: any = null;
-      let sourceAssignment: any = null;
-      
-      for (const group of groupsWithTeams) {
-        if (group.id === targetGroupId) continue; // Skip target group
-        
-        const assignment = group.assignments.find((a: any) => a.teamId === teamId);
-        if (assignment) {
-          sourceGroup = group;
-          sourceAssignment = assignment;
-          break;
-        }
-      }
-      
-      if (sourceGroup && sourceAssignment) {
-        // Move team from one group to another
-        moveTeamBetweenGroups(teamId, sourceGroup.id, targetGroupId, sourceAssignment.id);
-      } else {
-        // Assign team from unassigned to a group
-        assignTeamToGroup(teamId, targetGroupId);
-      }
-    }
-  };
+  // DnD handleDragEnd function removed
 
   // Assign team to group
   const assignTeamToGroup = async (teamId: number, groupId: number) => {
