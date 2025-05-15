@@ -1510,6 +1510,30 @@ export default function CategoryDetail() {
                               </div>
                             ))}
                           </div>
+                          
+                          {/* Save confirmation button */}
+                          {hasUnsavedChanges && (
+                            <div className="flex justify-center mt-8">
+                              <Button 
+                                className="w-full max-w-md"
+                                onClick={() => saveTeamAssignmentsMutation.mutate()}
+                                disabled={saveTeamAssignmentsMutation.isPending}
+                                size="lg"
+                              >
+                                {saveTeamAssignmentsMutation.isPending ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Saving Team Assignments...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="mr-2 h-4 w-4" />
+                                    Save Team Assignments
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
                         </DndContext>
                       )}
                     </CardContent>
