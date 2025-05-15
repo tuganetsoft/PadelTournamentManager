@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { 
   Form, 
   FormControl, 
+  FormDescription,
   FormField, 
   FormItem, 
   FormLabel, 
@@ -256,20 +257,24 @@ export default function CategoryDetail() {
   // Bulk import teams mutation
   const bulkImportMutation = useMutation({
     mutationFn: async (data: { teamNames: string }) => {
-      const teamNamesArray = data.teamNames
+      const teamLines = data.teamNames
         .split("\\n")
         .map((name) => name.trim())
         .filter((name) => name.length > 0);
 
       // Create all teams
-      const promises = teamNamesArray.map((teamName) => 
-        apiRequest("POST", "/api/teams", {
+      const promises = teamLines.map((line) => {
+        const isSeeded = line.startsWith('*');
+        const teamName = isSeeded ? line.substring(1).trim() : line;
+        
+        return apiRequest("POST", "/api/teams", {
           name: teamName,
           player1: "",
           player2: "",
           categoryId: Number(id),
-        })
-      );
+          seeded: isSeeded
+        });
+      });
 
       await Promise.all(promises);
       return { success: true };
@@ -602,7 +607,7 @@ export default function CategoryDetail() {
                           <DialogHeader>
                             <DialogTitle>Bulk Import Teams</DialogTitle>
                             <DialogDescription>
-                              Enter team names, one per line
+                              Enter team names, one per line. Mark seeded teams with an asterisk (*) at the beginning of the name.
                             </DialogDescription>
                           </DialogHeader>
                           <Form {...bulkImportForm}>
@@ -619,10 +624,13 @@ export default function CategoryDetail() {
                                     <FormControl>
                                       <Textarea 
                                         {...field} 
-                                        placeholder="Team 1\\nTeam 2\\nTeam 3"
+                                        placeholder="Team 1\n*Team 2\nTeam 3"
                                         rows={10}
                                       />
                                     </FormControl>
+                                    <FormDescription>
+                                      Add an asterisk (*) at the beginning of a team name to mark it as seeded
+                                    </FormDescription>
                                     <FormMessage />
                                   </FormItem>
                                 )}
@@ -645,7 +653,11 @@ export default function CategoryDetail() {
                         </DialogContent>
                       </Dialog>
                       
-                      <TeamForm categoryId={Number(id)}>
+                      <TeamForm 
+                        tournamentId={Number(tournamentId)}
+                        categories={[{id: Number(id), name: category?.name || ""}]}
+                        onSuccess={() => queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] })}
+                      >
                         <Button>
                           <PlusCircle className="mr-2 h-4 w-4" />
                           Add Team
