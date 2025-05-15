@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, ArrowLeft, Edit2, PlusCircle, Trash2, Users, UserPlus, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, Edit, PlusCircle, Trash, Trash2, Users, UserPlus, UserMinus, Loader2, GitBranch, FileText, Layers } from "lucide-react";
 import { TeamForm } from "@/components/team-form";
 import { TeamEditForm } from "@/components/team-edit-form";
 import { EliminationBracket } from "@/components/elimination-bracket";
@@ -50,6 +50,17 @@ import {
   DialogTrigger,
   DialogFooter
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -176,7 +187,7 @@ type Team = {
   seeded?: boolean;
 };
 
-// Sortable Team Item component for drag and drop
+// Sortable Team Item component for drag and drop (kept for backward compatibility)
 function SortableTeamItem({ team, groupId }: { team: Team, groupId?: number }) {
   const {
     attributes,
@@ -215,6 +226,233 @@ function SortableTeamItem({ team, groupId }: { team: Team, groupId?: number }) {
         {groupId && (
           <div className="text-sm font-medium text-primary">Group {groupId}</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Unassigned team component (with group assignment dropdown)
+function UnassignedTeamItem({ 
+  id, 
+  team 
+}: { 
+  id: string; 
+  team: Team;
+}) {
+  const { toast } = useToast();
+  const { id: categoryId, tournamentId } = useParams();
+  const [groups, setGroups] = useState<any[]>([]);
+  
+  // Get the list of groups from context
+  const { 
+    data: category,
+  } = useQuery<CategoryDetail>({
+    queryKey: [`/api/categories/${categoryId}/details`],
+    enabled: !!categoryId,
+  });
+
+  useEffect(() => {
+    if (category) {
+      setGroups(category.groups);
+    }
+  }, [category]);
+
+  return (
+    <div className="border rounded-lg p-4">
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="font-medium">{team.name}</h3>
+            <div className="text-sm text-muted-foreground">
+              {team.player1 && <p>Player 1: {team.player1}</p>}
+              {team.player2 && <p>Player 2: {team.player2}</p>}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Team</DialogTitle>
+                  <DialogDescription>
+                    Update team details below.
+                  </DialogDescription>
+                </DialogHeader>
+                <TeamEditForm
+                  team={team}
+                  onTeamUpdated={() => {
+                    queryClient.invalidateQueries({
+                      queryKey: [`/api/categories/${categoryId}/details`],
+                    });
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Team</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete this team? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={() => deleteTeam(parseInt(id))}
+                    className="bg-red-500 hover:bg-red-600"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+        
+        {/* Group assignment dropdown */}
+        {groups && groups.length > 0 && (
+          <div className="mt-2">
+            <Select 
+              onValueChange={(groupId) => {
+                assignTeamToGroup(parseInt(id), parseInt(groupId));
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Assign to group..." />
+              </SelectTrigger>
+              <SelectContent>
+                {groups.map(group => (
+                  <SelectItem key={group.id} value={group.id.toString()}>
+                    Group {group.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Assigned team component (with move and remove options)
+function AssignedTeamItem({ 
+  id, 
+  team, 
+  assignmentId,
+  groupId,
+  onRemove
+}: { 
+  id: string; 
+  team: Team;
+  assignmentId: number;
+  groupId: number;
+  onRemove: () => void;
+}) {
+  const { toast } = useToast();
+  const { id: categoryId, tournamentId } = useParams();
+  const [groups, setGroups] = useState<any[]>([]);
+  
+  // Get the list of groups from context
+  const { 
+    data: category,
+  } = useQuery<CategoryDetail>({
+    queryKey: [`/api/categories/${categoryId}/details`],
+    enabled: !!categoryId,
+  });
+
+  useEffect(() => {
+    if (category) {
+      setGroups(category.groups.filter(g => g.id !== groupId)); // Exclude current group
+    }
+  }, [category, groupId]);
+
+  return (
+    <div className="border rounded-lg p-4">
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="font-medium">{team.name}</h3>
+            <div className="text-sm text-muted-foreground">
+              {team.player1 && <p>Player 1: {team.player1}</p>}
+              {team.player2 && <p>Player 2: {team.player2}</p>}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Team</DialogTitle>
+                  <DialogDescription>
+                    Update team details below.
+                  </DialogDescription>
+                </DialogHeader>
+                <TeamEditForm
+                  team={team}
+                  onTeamUpdated={() => {
+                    queryClient.invalidateQueries({
+                      queryKey: [`/api/categories/${categoryId}/details`],
+                    });
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+        
+        <div className="flex gap-2 mt-2">
+          {/* Move to another group dropdown */}
+          {groups.length > 0 && (
+            <Select 
+              onValueChange={(targetGroupId) => {
+                moveTeamBetweenGroups(
+                  parseInt(id), 
+                  groupId, 
+                  parseInt(targetGroupId), 
+                  assignmentId
+                );
+              }}
+            >
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Move to group..." />
+              </SelectTrigger>
+              <SelectContent>
+                {groups.map(g => (
+                  <SelectItem key={g.id} value={g.id.toString()}>
+                    Group {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          
+          {/* Remove from group button */}
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="flex-shrink-0"
+            onClick={onRemove}
+          >
+            <UserMinus className="h-4 w-4 mr-2" />
+            Remove
+          </Button>
+        </div>
       </div>
     </div>
   );
