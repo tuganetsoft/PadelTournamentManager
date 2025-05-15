@@ -622,15 +622,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Generate matches for category
-  app.post("/api/categories/:id/generate-matches", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) return res.status(400).send("Invalid ID");
-    
-    try {
-      // Get category
-      const category = await storage.getCategory(id);
-      if (!category) return res.status(404).send("Category not found");
+  // First implementation of generate-matches endpoint removed (duplicated below)
       
       // Check if user owns the tournament
       const tournament = await storage.getTournament(category.tournamentId);
