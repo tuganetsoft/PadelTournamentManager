@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategoryCard } from "@/components/category-card";
+import { CategoryForm } from "@/components/category-form";
+import { TeamForm } from "@/components/team-form";
+import { VenueForm } from "@/components/venue-form";
 import { ScheduleCalendar } from "@/components/schedule-calendar";
 import { TournamentStandings } from "@/components/tournament-standings";
 import { EliminationBracket } from "@/components/elimination-bracket";
@@ -309,9 +312,11 @@ export default function TournamentDetail() {
             <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-medium text-neutral-dark">Categories</h2>
-                <Button>
-                  Add Category
-                </Button>
+                <CategoryForm tournamentId={Number(id)}>
+                  <Button>
+                    Add Category
+                  </Button>
+                </CategoryForm>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -374,9 +379,20 @@ export default function TournamentDetail() {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-medium text-neutral-dark">Participants</h2>
-                <Button>
-                  Add Teams
-                </Button>
+                {tournament.categories?.length > 0 ? (
+                  <TeamForm 
+                    tournamentId={Number(id)} 
+                    categories={tournament.categories || []}
+                  >
+                    <Button>
+                      Add Teams
+                    </Button>
+                  </TeamForm>
+                ) : (
+                  <Button disabled title="Please add categories first">
+                    Add Teams
+                  </Button>
+                )}
               </div>
               
               <div className="space-y-6">
@@ -406,9 +422,11 @@ export default function TournamentDetail() {
             <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-medium text-neutral-dark">Venues</h2>
-                <Button>
-                  Add Venue
-                </Button>
+                <VenueForm tournamentId={Number(id)}>
+                  <Button>
+                    Add Venue
+                  </Button>
+                </VenueForm>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
