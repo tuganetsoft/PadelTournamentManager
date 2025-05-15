@@ -419,126 +419,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (tournament?.userId !== req.user.id) {
         return res.status(403).send("Not authorized to manage this category");
       }
+
+      // --------- SIMPLER APPROACH BASED ON AUTO-ASSIGN LOGIC ---------
       
-      // Get teams and current assignments
+      // Get teams and groups
       const teams = await storage.getTeamsByCategoryId(id);
+      if (teams.length === 0) {
+        return res.status(200).json({ success: true, message: "No teams to process" });
+      }
+      
       const groups = await storage.getGroupsByCategoryId(id);
+      if (groups.length === 0) {
+        return res.status(200).json({ success: true, message: "No groups available" });
+      }
       
-      // Get current team assignments
-      // This is the data we want to persist
-      const currentAssignments: { 
-        teamId: number; 
-        groupId: number;
-        assignmentId?: number; // Existing assignment ID if any
-      }[] = [];
+      // Build a map of existing assignments (teamId -> groupId)
+      const teamToGroupMap = new Map<number, number>();
+      const teamToAssignmentMap = new Map<number, number>(); // teamId -> assignmentId
       
-      // Get all assignments across all groups
+      // Track all assignments across all groups
       for (const group of groups) {
-        const groupAssignments = await storage.getGroupAssignmentsByGroupId(group.id);
-        for (const assignment of groupAssignments) {
-          currentAssignments.push({
-            teamId: assignment.teamId,
-            groupId: group.id,
-            assignmentId: assignment.id
-          });
+        const assignments = await storage.getGroupAssignmentsByGroupId(group.id);
+        for (const assignment of assignments) {
+          teamToGroupMap.set(assignment.teamId, group.id);
+          teamToAssignmentMap.set(assignment.teamId, assignment.id);
         }
       }
       
-      console.log(`Found ${currentAssignments.length} current team assignments to persist`);
+      console.log(`Current database state: ${teamToGroupMap.size} teams assigned to groups`);
       
-      // For each team, ensure it's only in one group (or none)
-      const teamIdToGroup = new Map<number, number>();
-      const changesCount = { updated: 0, deleted: 0, created: 0 };
+      // Now check if there are any direct API calls needed to reconcile 
+      // between what's in the database and what's in the UI state
+      const changesCount = { created: 0, deleted: 0, updated: 0 };
       
+      // The client already made individual API calls to add/remove teams
+      // This endpoint just ensures database consistency and handles any race conditions
+      
+      // For each team in the database, make sure any manual assignments were correctly persisted
+      // This ensures that even if individual API calls had issues, the final state is correct
       for (const team of teams) {
-        const teamAssignments = currentAssignments.filter(a => a.teamId === team.id);
+        // Get latest UI state for this team from query params or body
+        // Since this is just a confirmation operation, we'll rely on whatever state is in the DB
+        const currentGroupId = teamToGroupMap.get(team.id);
         
-        if (teamAssignments.length === 0) {
-          // Team is not assigned to any group, which is valid
-          continue;
-        }
-        
-        if (teamAssignments.length === 1) {
-          // Team is correctly assigned to only one group
-          teamIdToGroup.set(team.id, teamAssignments[0].groupId);
-          continue;
-        }
-        
-        // If we have multiple assignments, keep only the most recent one
-        // and delete the others
-        console.log(`Team ${team.id} has ${teamAssignments.length} assignments. Cleaning up...`);
-        
-        // Find the most recent assignment (assuming higher ID = more recent)
-        const mostRecentAssignment = teamAssignments.reduce((prev, current) => 
-          (prev.assignmentId || 0) > (current.assignmentId || 0) ? prev : current
-        );
-        
-        // Keep this assignment
-        teamIdToGroup.set(team.id, mostRecentAssignment.groupId);
-        
-        // Delete all other assignments
-        for (const assignment of teamAssignments) {
-          if (assignment.assignmentId !== mostRecentAssignment.assignmentId) {
-            if (assignment.assignmentId) {
-              console.log(`Deleting duplicate assignment ${assignment.assignmentId} for team ${team.id}`);
-              await storage.deleteGroupAssignment(assignment.assignmentId);
-              changesCount.deleted++;
-            }
-          }
-        }
-      }
-      
-      // Now reconcile the assignments with what's already in the database
-      for (const team of teams) {
-        const desiredGroupId = teamIdToGroup.get(team.id);
-        const existingAssignments = currentAssignments.filter(a => a.teamId === team.id);
-        
-        if (!desiredGroupId && existingAssignments.length > 0) {
-          // Team should not be in any group, but has assignments - delete them
-          for (const assignment of existingAssignments) {
-            if (assignment.assignmentId) {
-              console.log(`Deleting assignment ${assignment.assignmentId} for team ${team.id}`);
-              await storage.deleteGroupAssignment(assignment.assignmentId);
-              changesCount.deleted++;
-            }
-          }
-        } else if (desiredGroupId) {
-          // Team should be in a specific group
-          if (existingAssignments.length === 0) {
-            // Team is not in any group but should be - create the assignment
-            console.log(`Creating new assignment for team ${team.id} in group ${desiredGroupId}`);
-            await storage.createGroupAssignment({
-              teamId: team.id,
-              groupId: desiredGroupId,
-              played: 0,
-              won: 0,
-              lost: 0,
-              points: 0
-            });
-            changesCount.created++;
-          } else if (existingAssignments[0].groupId !== desiredGroupId) {
-            // Team is in wrong group - update the assignment
-            console.log(`Updating assignment for team ${team.id} from group ${existingAssignments[0].groupId} to ${desiredGroupId}`);
-            if (existingAssignments[0].assignmentId) {
-              await storage.updateGroupAssignment(existingAssignments[0].assignmentId, {
-                groupId: desiredGroupId
+        // But as an extra check, verify the team is assigned to the expected group
+        // If there's a mismatch between the DB and what we expected, fix it
+        if (req.body && req.body.assignments) {
+          const expectedAssignment = req.body.assignments.find((a: any) => a.teamId === team.id);
+          if (expectedAssignment && expectedAssignment.groupId !== currentGroupId) {
+            console.log(`Team ${team.id} should be in group ${expectedAssignment.groupId} but is in ${currentGroupId || 'none'}`);
+            
+            // Update the assignment
+            const assignmentId = teamToAssignmentMap.get(team.id);
+            if (assignmentId) {
+              // Team already has an assignment, update it
+              await storage.updateGroupAssignment(assignmentId, {
+                groupId: expectedAssignment.groupId
               });
               changesCount.updated++;
+            } else {
+              // Team doesn't have an assignment yet, create one
+              await storage.createGroupAssignment({
+                teamId: team.id,
+                groupId: expectedAssignment.groupId,
+                played: 0,
+                won: 0,
+                lost: 0,
+                points: 0
+              });
+              changesCount.created++;
             }
           }
         }
       }
       
-      // Log success
-      console.log("Team assignments saved successfully:", changesCount);
-      
-      if (changesCount.created === 0 && changesCount.updated === 0 && changesCount.deleted === 0) {
-        return res.status(200).json({ success: true, message: "No changes to save" });
+      // Check for any orphaned assignments (assigned teams that no longer exist)
+      // Convert the Map entries to an array to avoid TypeScript issues with Map.entries() iterator
+      const assignedTeams = Array.from(teamToGroupMap.entries());
+      for (const [teamId, groupId] of assignedTeams) {
+        const teamExists = teams.some(t => t.id === teamId);
+        if (!teamExists) {
+          // This is an assignment for a team that no longer exists
+          const assignmentId = teamToAssignmentMap.get(teamId);
+          if (assignmentId) {
+            console.log(`Deleting orphaned assignment ${assignmentId} for deleted team ${teamId}`);
+            await storage.deleteGroupAssignment(assignmentId);
+            changesCount.deleted++;
+          }
+        }
       }
       
+      // If no changes were made here, it means all changes were already handled by individual API calls
+      if (changesCount.created === 0 && changesCount.deleted === 0 && changesCount.updated === 0) {
+        // We didn't need to make any changes here, but need to mark the state as saved on the client
+        console.log("No additional changes needed during save-assignments");
+        return res.status(200).json({ 
+          success: true, 
+          message: "Assignments verified and saved successfully",
+          changes: false
+        });
+      }
+      
+      // If we made changes, return the counts
       return res.status(200).json({ 
         success: true, 
-        message: `Team assignments saved (${changesCount.created} created, ${changesCount.updated} updated, ${changesCount.deleted} deleted)` 
+        message: `Team assignments saved (${changesCount.created} created, ${changesCount.updated} updated, ${changesCount.deleted} deleted)`,
+        changes: true
       });
     } catch (error) {
       console.error("Error saving team assignments:", error);
@@ -632,69 +618,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error auto-assigning teams:", error);
       res.status(500).json({ error: "Failed to auto-assign teams" });
-    }
-  });
-  
-  // Save team assignments (finalizes all temporary assignments)
-  app.post("/api/categories/:id/save-assignments", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) return res.status(400).send("Invalid ID");
-    
-    try {
-      // Get category
-      const category = await storage.getCategory(id);
-      if (!category) return res.status(404).send("Category not found");
-      
-      // Check if user owns the tournament
-      const tournament = await storage.getTournament(category.tournamentId);
-      if (tournament.userId !== req.user.id) {
-        return res.status(403).send("Not authorized to manage this category");
-      }
-      
-      // Get all groups for this category
-      const groups = await storage.getGroupsByCategoryId(id);
-      
-      // Nothing to do if no groups
-      if (groups.length === 0) {
-        return res.status(200).json({ success: true, message: "No groups to save" });
-      }
-      
-      // For each group, get assignments and finalize any temporary ones
-      let changesCount = 0;
-      
-      for (const group of groups) {
-        const assignments = await storage.getGroupAssignmentsByGroupId(group.id);
-        
-        // Process temporary assignments (those with negative IDs)
-        for (const assignment of assignments) {
-          if (assignment.id < 0) {
-            // Create a permanent assignment
-            await storage.createGroupAssignment({
-              groupId: assignment.groupId,
-              teamId: assignment.teamId,
-              played: assignment.played,
-              won: assignment.won,
-              lost: assignment.lost,
-              points: assignment.points
-            });
-            
-            // Delete the temporary assignment
-            await storage.deleteGroupAssignment(assignment.id);
-            changesCount++;
-          }
-        }
-      }
-      
-      res.status(200).json({ 
-        success: true, 
-        message: changesCount > 0 
-          ? `Saved ${changesCount} team assignments` 
-          : "No changes to save" 
-      });
-    } catch (error) {
-      console.error("Error saving team assignments:", error);
-      res.status(500).json({ error: "Failed to save team assignments" });
     }
   });
   
