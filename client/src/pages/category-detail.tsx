@@ -504,101 +504,12 @@ export default function CategoryDetail() {
       generateMatchesForm.reset();
       setGenerateMatchesOpen(false);
       
-      // Optimistic UI update to show generated matches
-      if (category) {
-        // In reality we'd know exactly what matches were generated from the API response
-        // Here we're just doing a simple display estimation for immediate feedback
-        
-        // Create "loading" matches to show in the UI until the real data loads
-        let placeholderMatches: any[] = [];
-        const matchType = generateMatchesForm.getValues().matchType as "ROUND_ROBIN" | "SINGLE_ELIMINATION" || "ROUND_ROBIN";
-        
-        if (matchType === "ROUND_ROBIN" && category.groups.length > 0) {
-          // For round robin, create placeholder matches between teams in each group
-          for (const group of category.groups) {
-            const teamIds = group.assignments.map(a => a.teamId);
-            
-            // Create a match between each pair of teams
-            for (let i = 0; i < teamIds.length; i++) {
-              for (let j = i + 1; j < teamIds.length; j++) {
-                const teamA = group.assignments[i].team;
-                const teamB = group.assignments[j].team;
-                
-                placeholderMatches.push({
-                  id: -1 * (placeholderMatches.length + 1), // Temporary negative ID
-                  categoryId: Number(id),
-                  teamAId: teamIds[i],
-                  teamBId: teamIds[j],
-                  groupId: group.id,
-                  completed: false,
-                  teamA,
-                  teamB
-                });
-              }
-            }
-          }
-        } else if (matchType === "SINGLE_ELIMINATION") {
-          // For single elimination, create a simple bracket structure
-          const allTeams = category.teams;
-          const teamCount = allTeams.length;
-          const rounds = Math.ceil(Math.log2(teamCount));
-          
-          // Create first round matches
-          for (let i = 0; i < Math.floor(teamCount / 2); i++) {
-            placeholderMatches.push({
-              id: -1 * (placeholderMatches.length + 1),
-              categoryId: Number(id),
-              teamAId: allTeams[i * 2].id,
-              teamBId: allTeams[i * 2 + 1].id,
-              round: "R1",
-              completed: false,
-              teamA: allTeams[i * 2],
-              teamB: allTeams[i * 2 + 1]
-            });
-          }
-          
-          // Add remaining rounds as placeholder matches with unknown teams
-          for (let r = 2; r <= rounds; r++) {
-            const matchesInRound = Math.pow(2, rounds - r);
-            for (let i = 0; i < matchesInRound; i++) {
-              placeholderMatches.push({
-                id: -1 * (placeholderMatches.length + 1),
-                categoryId: Number(id),
-                teamAId: 0, // Unknown until previous match is completed
-                teamBId: 0, // Unknown until previous match is completed
-                round: `R${r}`,
-                completed: false
-              });
-            }
-          }
-        }
-        
-        // Update the UI with the placeholder matches
-        const updatedCategory = {
-          ...category,
-          matches: [...category.matches, ...placeholderMatches]
-        };
-        
-        // Force an optimistic UI update using setTimeout to avoid React batch updates
-        // This isn't needed with proper state management, but helps guarantee UI refresh
-        setTimeout(() => {
-          if (updatedCategory) {
-            const assignedTeamIds = updatedCategory.groups.flatMap(g => 
-              g.assignments.map(a => a.teamId)
-            );
-            
-            const unassigned = updatedCategory.teams.filter(
-              team => !assignedTeamIds.includes(team.id)
-            );
-            
-            setUnassignedTeams(unassigned);
-            setGroupsWithTeams(updatedCategory.groups);
-          }
-        }, 100);
-      }
+      // Set active tab to matches to show the newly generated matches
+      setActiveTab("matches");
       
-      // Refetch category details data
+      // Refresh data to get the latest matches
       queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      
       // Also refresh any list that might show this category
       queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/details`] });
     },
