@@ -44,25 +44,19 @@ export function MatchCard({ match }: MatchCardProps) {
   );
 
   return (
-    <div className={`h-full w-full flex items-center justify-center ${getCategoryColor()} border rounded-md p-2`}>
-      <div className="text-xs text-center space-y-1">
-        <div className="font-medium text-neutral-dark">{match.category.name}</div>
-        <div>
-          {match.teamA?.name || `Team ID: ${match.teamAId}`} vs {match.teamB?.name || `Team ID: ${match.teamBId}`}
+    <div className={`h-full w-full flex items-center justify-center ${getCategoryColor()} border rounded-md p-1`}>
+      <div className="text-[9px] text-center space-y-0 w-full leading-tight">
+        <div className="font-medium text-neutral-dark text-[10px]">{match.category.name}</div>
+        <div className="truncate max-w-full" title={match.teamA?.name || `Team ${match.teamAId}`}>
+          {match.teamA?.name || `T${match.teamAId}`}
         </div>
-        <div className="text-neutral-dark text-[10px]">
-          {match.round === 'GROUP' ? `Group ${match.groupId ? String.fromCharCode(64 + match.groupId) : ''}` : match.round}
+        <div className="text-[8px]">vs</div>
+        <div className="truncate max-w-full" title={match.teamB?.name || `Team ${match.teamBId}`}>
+          {match.teamB?.name || `T${match.teamBId}`}
         </div>
-        {match.completed && (
-          <div className="text-neutral-dark text-[10px]">
-            Winner: {match.winner === match.teamAId
-              ? match.teamA?.name
-              : match.winner === match.teamBId
-                ? match.teamB?.name
-                : 'Not set'
-            }
-          </div>
-        )}
+        <div className="text-neutral-dark text-[8px]">
+          {match.round === 'GROUP' ? `G${match.groupId ? String.fromCharCode(64 + match.groupId) : ''}` : match.round}
+        </div>
       </div>
     </div>
   );

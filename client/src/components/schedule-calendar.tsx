@@ -259,6 +259,29 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
     }
   });
 
+  // Function to generate distinct colors for courts
+  const getCourtColor = (courtId: number) => {
+    // Array of distinct colors
+    const colors = [
+      '#3b82f6', // blue-500
+      '#10b981', // emerald-500
+      '#f59e0b', // amber-500
+      '#ef4444', // red-500
+      '#8b5cf6', // violet-500
+      '#ec4899', // pink-500
+      '#06b6d4', // cyan-500
+      '#84cc16', // lime-500
+      '#6366f1', // indigo-500
+      '#f97316', // orange-500
+      '#14b8a6', // teal-500
+      '#d946ef', // fuchsia-500
+      '#64748b', // slate-500
+    ];
+    
+    // Use modulo to cycle through colors if we have more courts than colors
+    return colors[(courtId - 1) % colors.length];
+  };
+
   // Generate time slots from 8:00 to 22:00
   const timeSlots = Array.from({ length: 15 }, (_, i) => {
     const hour = i + 8;
@@ -326,15 +349,15 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
         </div>
 
         {/* Calendar Schedule */}
-        <div className="overflow-x-auto">
-          <div className="grid grid-cols-[70px_repeat(auto-fit,minmax(200px,1fr))] min-w-[800px]">
+        <div className="overflow-x-auto max-h-[80vh]">
+          <div className="grid grid-cols-[50px_repeat(auto-fit,minmax(100px,120px))] min-w-[800px]">
             {/* Time column */}
             <div className="sticky left-0 bg-white z-10 border-r border-neutral-light">
               <div className="h-12 flex items-center justify-center font-medium text-neutral-dark bg-neutral-lighter">
                 Time
               </div>
               {timeSlots.map((slot) => (
-                <div key={slot} className="h-24 border-b border-neutral-light flex items-center justify-center text-sm text-neutral-dark bg-white">
+                <div key={slot} className="h-12 border-b border-neutral-light flex items-center justify-center text-xs text-neutral-dark bg-white">
                   {slot}
                 </div>
               ))}
@@ -344,7 +367,12 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
             {venues.flatMap(venue => 
               venue.courts.map(court => (
                 <div key={court.id}>
-                  <div className="h-12 flex items-center justify-center font-medium text-neutral-dark bg-neutral-lighter border-b border-neutral-light">
+                  <div 
+                    className={`h-8 flex items-center justify-center font-medium text-white border-b border-neutral-light`}
+                    style={{ 
+                      backgroundColor: getCourtColor(court.id),
+                    }}
+                  >
                     {court.name}
                   </div>
                   
@@ -359,7 +387,7 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
                         key={`${court.id}-${slot}`}
                         ref={el => dropzonesRef.current[`${court.id}-${slot}`] = el}
                         className={`
-                          h-24 dropzone
+                          h-12 dropzone
                           ${slot === '12:00' ? 'border-t-2 border-t-orange-400' : 'border-t border-neutral-light'}
                           ${slot === '13:00' || slot === '14:00' ? 'border-b-2 border-b-orange-400' : 'border-b border-neutral-light'}
                           ${venue.courts.indexOf(court) === 0 ? 'border-l-2 border-l-blue-400' : ''}
