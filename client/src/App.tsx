@@ -6,6 +6,7 @@ import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import TournamentDetail from "@/pages/tournament-detail";
 import TournamentCreate from "@/pages/tournament-create";
+import CategoryDetail from "@/pages/category-detail";
 import { ProtectedRoute } from "@/lib/protected-route";
 
 function Router() {
@@ -14,6 +15,7 @@ function Router() {
       <ProtectedRoute path="/" component={HomePage} />
       <ProtectedRoute path="/tournaments/create" component={TournamentCreate} />
       <ProtectedRoute path="/tournaments/:id" component={TournamentDetail} />
+      <ProtectedRoute path="/tournaments/:tournamentId/categories/:id" component={CategoryDetail} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
