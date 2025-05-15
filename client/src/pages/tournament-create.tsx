@@ -69,8 +69,11 @@ export default function TournamentCreate() {
     mutationFn: async (data: TournamentFormValues) => {
       setIsSubmitting(true);
       try {
+        // Ensure dates are properly ISO formatted strings
         const payload = {
           ...data,
+          startDate: data.startDate instanceof Date ? data.startDate.toISOString() : data.startDate,
+          endDate: data.endDate instanceof Date ? data.endDate.toISOString() : data.endDate,
           userId: user!.id,
         };
         const res = await apiRequest("POST", "/api/tournaments", payload);

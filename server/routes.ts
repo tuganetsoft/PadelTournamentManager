@@ -51,15 +51,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
     
     try {
-      const data = insertTournamentSchema.parse({
+      // Parse dates from strings if they are strings
+      const formData = {
         ...req.body,
+        startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
+        endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
         userId: req.user.id
-      });
+      };
+      
+      const data = insertTournamentSchema.parse(formData);
       
       const tournament = await storage.createTournament(data);
       res.status(201).json(tournament);
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ error: JSON.stringify(error, null, 2) });
     }
   });
 
