@@ -664,11 +664,15 @@ export default function CategoryDetail() {
       // Set active tab to matches to show the newly generated matches
       setActiveTab("matches");
       
-      // Refresh data to get the latest matches
+      // Refresh all necessary data
       queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
-      
-      // Also refresh any list that might show this category
       queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/details`] });
+      
+      // Also invalidate any schedule-related queries
+      queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/matches`] });
+      
+      // Force refetch the category details to get updated data immediately
+      refetch();
     },
     onError: (error: Error) => {
       toast({
