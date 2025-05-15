@@ -432,22 +432,29 @@ export default function CategoryDetail() {
   // Save team assignments mutation
   const saveTeamAssignmentsMutation = useMutation({
     mutationFn: async () => {
+      console.log("Saving team assignments...");
       const res = await apiRequest("POST", `/api/categories/${id}/save-assignments`);
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.error || "Failed to save team assignments");
       }
-      return { success: true };
+      return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Team assignments saved successfully:", data);
       toast({
         title: "Team assignments saved",
         description: "All team assignments have been saved successfully",
       });
+      
+      // Reset UI state
       setHasUnsavedChanges(false);
+      
+      // Refresh the data
       queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
     },
     onError: (error: Error) => {
+      console.error("Error saving assignments:", error);
       toast({
         title: "Error saving assignments",
         description: error.message,

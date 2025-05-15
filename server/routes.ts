@@ -420,9 +420,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).send("Not authorized to manage this category");
       }
       
-      // This endpoint is just a confirmation step - the actual changes have already been
-      // made by individual API calls (add/remove/move team assignments)
-      // It serves as a definitive "save" to confirm all the changes are final
+      // Get teams and current assignments
+      const teams = await storage.getTeamsByCategoryId(id);
+      const groups = await storage.getGroupsByCategoryId(id);
+      
+      // Verify that the assignments are valid by checking if each team in the category
+      // is either in a group or unassigned (but not in multiple groups)
+      
+      // Get all assignments across all groups
+      let allAssignments: { id: number; groupId: number; teamId: number }[] = [];
+      for (const group of groups) {
+        const groupAssignments = await storage.getGroupAssignmentsByGroupId(group.id);
+        allAssignments = [...allAssignments, ...groupAssignments];
+      }
+      
+      // Check for duplicates (team assigned to multiple groups) 
+      const teamCounts: { [key: number]: number } = {};
+      for (const assignment of allAssignments) {
+        if (!teamCounts[assignment.teamId]) {
+          teamCounts[assignment.teamId] = 1;
+        } else {
+          teamCounts[assignment.teamId]++;
+        }
+      }
+      
+      // If we find duplicates, clean them up by keeping only the latest assignment for each team
+      for (const teamIdString in teamCounts) {
+        const teamId = parseInt(teamIdString);
+        if (teamCounts[teamId] > 1) {
+          // Find all assignments for this team
+          const teamAssignments = allAssignments.filter(a => a.teamId === teamId);
+          
+          // Sort by assignment ID (descending) to get the most recent one
+          teamAssignments.sort((a, b) => b.id - a.id);
+          
+          // Keep the first one (most recent) and delete the rest
+          for (let i = 1; i < teamAssignments.length; i++) {
+            await storage.deleteGroupAssignment(teamAssignments[i].id);
+          }
+        }
+      }
+      
+      // Log success 
+      console.log("Team assignments verification completed and saved successfully");
       
       return res.status(200).json({ success: true, message: "Team assignments saved" });
     } catch (error) {
