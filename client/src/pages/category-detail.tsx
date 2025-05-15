@@ -295,19 +295,12 @@ export default function CategoryDetail() {
   // Create groups mutation
   const createGroupsMutation = useMutation({
     mutationFn: async (data: { groupCount: number }) => {
-      // Create groups
-      const promises = [];
-      for (let i = 1; i <= data.groupCount; i++) {
-        promises.push(
-          apiRequest("POST", "/api/groups", {
-            name: `Group ${i}`,
-            categoryId: Number(id),
-          })
-        );
-      }
-      
-      await Promise.all(promises);
-      return { success: true };
+      // Create all groups at once via the batch endpoint
+      const response = await apiRequest("POST", `/api/categories/${id}/create-groups`, {
+        groupCount: data.groupCount
+      });
+      const result = await response.json();
+      return result;
     },
     onSuccess: () => {
       toast({

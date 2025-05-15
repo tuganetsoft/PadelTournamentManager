@@ -341,6 +341,302 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const teams = await storage.getTeamsByCategoryId(categoryId);
     res.json(teams);
   });
+  
+  // Get category details with all related data
+  app.get("/api/categories/:id/details", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).send("Invalid ID");
+    
+    try {
+      // Get base category data
+      const category = await storage.getCategory(id);
+      if (!category) return res.status(404).send("Category not found");
+      
+      // Get tournament
+      const tournament = await storage.getTournament(category.tournamentId);
+      
+      // Get teams
+      const teams = await storage.getTeamsByCategoryId(id);
+      
+      // Get groups with assignments
+      const groups = await storage.getGroupsByCategoryId(id);
+      const groupsWithAssignments = await Promise.all(
+        groups.map(async (group) => {
+          const assignments = await storage.getGroupAssignmentsByGroupId(group.id);
+          
+          // Add team data to assignments
+          const assignmentsWithTeams = await Promise.all(
+            assignments.map(async (assignment) => {
+              const team = await storage.getTeam(assignment.teamId);
+              return { ...assignment, team };
+            })
+          );
+          
+          return { ...group, assignments: assignmentsWithTeams };
+        })
+      );
+      
+      // Get matches
+      const matches = await storage.getMatchesByCategoryId(id);
+      const matchesWithTeams = await Promise.all(
+        matches.map(async (match) => {
+          const teamA = match.teamAId ? await storage.getTeam(match.teamAId) : null;
+          const teamB = match.teamBId ? await storage.getTeam(match.teamBId) : null;
+          
+          return { ...match, teamA, teamB };
+        })
+      );
+      
+      // Combine data
+      const categoryDetails = {
+        ...category,
+        tournament,
+        teams,
+        groups: groupsWithAssignments,
+        matches: matchesWithTeams
+      };
+      
+      res.json(categoryDetails);
+    } catch (error) {
+      console.error("Error fetching category details:", error);
+      res.status(500).json({ error: "Failed to load category details" });
+    }
+  });
+  
+  // Auto-assign teams to groups
+  app.post("/api/categories/:id/auto-assign-teams", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).send("Invalid ID");
+    
+    try {
+      // Get category
+      const category = await storage.getCategory(id);
+      if (!category) return res.status(404).send("Category not found");
+      
+      // Check if user owns the tournament
+      const tournament = await storage.getTournament(category.tournamentId);
+      if (tournament.userId !== req.user.id) {
+        return res.status(403).send("Not authorized to manage this category");
+      }
+      
+      // Get teams and groups
+      const teams = await storage.getTeamsByCategoryId(id);
+      if (teams.length === 0) {
+        return res.status(400).json({ error: "No teams to assign" });
+      }
+      
+      const groups = await storage.getGroupsByCategoryId(id);
+      if (groups.length === 0) {
+        return res.status(400).json({ error: "No groups available" });
+      }
+      
+      // Get existing assignments
+      let existingAssignments = [];
+      for (const group of groups) {
+        const assignments = await storage.getGroupAssignmentsByGroupId(group.id);
+        existingAssignments = [...existingAssignments, ...assignments.map(a => a.teamId)];
+      }
+      
+      // Filter out already assigned teams
+      const unassignedTeams = teams.filter(team => !existingAssignments.includes(team.id));
+      
+      if (unassignedTeams.length === 0) {
+        return res.status(400).json({ error: "All teams are already assigned" });
+      }
+      
+      // Shuffle teams randomly
+      const shuffledTeams = [...unassignedTeams].sort(() => Math.random() - 0.5);
+      
+      // Distribute teams evenly
+      for (let i = 0; i < shuffledTeams.length; i++) {
+        const team = shuffledTeams[i];
+        const groupIndex = i % groups.length;
+        const group = groups[groupIndex];
+        
+        await storage.createGroupAssignment({
+          groupId: group.id,
+          teamId: team.id,
+          played: 0,
+          won: 0,
+          lost: 0,
+          points: 0
+        });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error auto-assigning teams:", error);
+      res.status(500).json({ error: "Failed to auto-assign teams" });
+    }
+  });
+  
+  // Generate matches for category
+  app.post("/api/categories/:id/generate-matches", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).send("Invalid ID");
+    
+    try {
+      // Get category
+      const category = await storage.getCategory(id);
+      if (!category) return res.status(404).send("Category not found");
+      
+      // Check if user owns the tournament
+      const tournament = await storage.getTournament(category.tournamentId);
+      if (tournament.userId !== req.user.id) {
+        return res.status(403).send("Not authorized to manage this category");
+      }
+      
+      const { matchType, autoAssignCourts } = req.body;
+      
+      // Generate appropriate matches based on format
+      let generatedMatches = [];
+      
+      if (matchType === "GROUP_STAGE" && (category.format === "GROUPS" || category.format === "GROUPS_AND_ELIMINATION")) {
+        // Generate round-robin matches within each group
+        const groups = await storage.getGroupsByCategoryId(id);
+        
+        if (groups.length === 0) {
+          return res.status(400).json({ error: "No groups available" });
+        }
+        
+        for (const group of groups) {
+          // Get teams in this group
+          const assignments = await storage.getGroupAssignmentsByGroupId(group.id);
+          if (assignments.length < 2) {
+            continue; // Skip groups with fewer than 2 teams
+          }
+          
+          const teamIds = assignments.map(a => a.teamId);
+          
+          // Generate round-robin matches (each team plays against all others)
+          for (let i = 0; i < teamIds.length; i++) {
+            for (let j = i + 1; j < teamIds.length; j++) {
+              const match = await storage.createMatch({
+                categoryId: id,
+                teamAId: teamIds[i],
+                teamBId: teamIds[j],
+                groupId: group.id,
+                completed: false
+              });
+              
+              generatedMatches.push(match);
+            }
+          }
+        }
+      } else if (matchType === "KNOCKOUT") {
+        // For knockout stage, we need to determine the number of matches based on team count
+        let teams;
+        
+        if (category.format === "GROUPS_AND_ELIMINATION") {
+          // For hybrid format, use top teams from groups
+          const groups = await storage.getGroupsByCategoryId(id);
+          const qualifiedTeams = [];
+          
+          for (const group of groups) {
+            const assignments = await storage.getGroupAssignmentsByGroupId(group.id);
+            // Sort by points (descending)
+            assignments.sort((a, b) => b.points - a.points);
+            // Take top 2 teams from each group
+            const topTeams = assignments.slice(0, 2).map(a => a.teamId);
+            qualifiedTeams.push(...topTeams);
+          }
+          
+          teams = qualifiedTeams;
+        } else {
+          // For single elimination, use all teams
+          const allTeams = await storage.getTeamsByCategoryId(id);
+          teams = allTeams.map(team => team.id);
+        }
+        
+        if (teams.length < 2) {
+          return res.status(400).json({ error: "Need at least 2 teams for knockout stage" });
+        }
+        
+        // Calculate rounds needed (power of 2 >= teams.length)
+        let roundsNeeded = 1;
+        while (Math.pow(2, roundsNeeded) < teams.length) {
+          roundsNeeded++;
+        }
+        
+        // Number of matches in first round
+        const firstRoundMatches = Math.pow(2, roundsNeeded - 1);
+        const byes = Math.pow(2, roundsNeeded) - teams.length;
+        
+        // Shuffle teams
+        const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
+        
+        // Create first round matches
+        for (let i = 0; i < firstRoundMatches; i++) {
+          const teamAIndex = i;
+          const teamBIndex = teams.length - 1 - i;
+          
+          // Handle byes
+          if (teamBIndex < teamAIndex || teamBIndex >= teams.length) {
+            continue; // Skip this match (bye)
+          }
+          
+          const match = await storage.createMatch({
+            categoryId: id,
+            teamAId: shuffledTeams[teamAIndex],
+            teamBId: shuffledTeams[teamBIndex],
+            round: "Round 1",
+            completed: false
+          });
+          
+          generatedMatches.push(match);
+        }
+        
+        // Create placeholder matches for later rounds
+        for (let round = 2; round <= roundsNeeded; round++) {
+          const matchesInRound = Math.pow(2, roundsNeeded - round);
+          
+          for (let i = 0; i < matchesInRound; i++) {
+            const match = await storage.createMatch({
+              categoryId: id,
+              teamAId: 0, // Placeholder, will be filled later
+              teamBId: 0, // Placeholder, will be filled later
+              round: `Round ${round}`,
+              completed: false
+            });
+            
+            generatedMatches.push(match);
+          }
+        }
+      }
+      
+      // Auto-assign courts if requested
+      if (autoAssignCourts) {
+        // Get available courts from venues of this tournament
+        const venues = await storage.getVenuesByTournamentId(tournament.id);
+        let allCourts = [];
+        
+        for (const venue of venues) {
+          const courts = await storage.getCourtsByVenueId(venue.id);
+          allCourts = [...allCourts, ...courts];
+        }
+        
+        if (allCourts.length > 0) {
+          // Simple round-robin assignment of courts to matches
+          for (let i = 0; i < generatedMatches.length; i++) {
+            const courtIndex = i % allCourts.length;
+            await storage.updateMatch(generatedMatches[i].id, {
+              courtId: allCourts[courtIndex].id
+            });
+          }
+        }
+      }
+      
+      // Update category status
+      await storage.updateCategory(id, { status: "ACTIVE" });
+      
+      res.json({ success: true, matches: generatedMatches.length });
+    } catch (error) {
+      console.error("Error generating matches:", error);
+      res.status(500).json({ error: "Failed to generate matches" });
+    }
+  });
 
   // Create team
   app.post("/api/teams", async (req, res) => {
@@ -538,6 +834,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(allMatches);
   });
 
+  // Create multiple groups at once
+  app.post("/api/categories/:id/create-groups", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).send("Invalid ID");
+    
+    try {
+      // Get category
+      const category = await storage.getCategory(id);
+      if (!category) return res.status(404).send("Category not found");
+      
+      // Check if user owns the tournament
+      const tournament = await storage.getTournament(category.tournamentId);
+      if (tournament.userId !== req.user.id) {
+        return res.status(403).send("Not authorized to manage this category");
+      }
+      
+      const { groupCount } = req.body;
+      if (!groupCount || isNaN(Number(groupCount)) || Number(groupCount) < 1) {
+        return res.status(400).json({ error: "Invalid group count" });
+      }
+      
+      // Check if groups already exist
+      const existingGroups = await storage.getGroupsByCategoryId(id);
+      if (existingGroups.length > 0) {
+        return res.status(400).json({ error: "Groups already exist for this category" });
+      }
+      
+      // Create the specified number of groups
+      const createdGroups = [];
+      
+      for (let i = 1; i <= Number(groupCount); i++) {
+        const group = await storage.createGroup({
+          name: `Group ${i}`,
+          categoryId: id
+        });
+        
+        createdGroups.push(group);
+      }
+      
+      res.status(201).json(createdGroups);
+    } catch (error) {
+      console.error("Error creating groups:", error);
+      res.status(500).json({ error: "Failed to create groups" });
+    }
+  });
+  
   // Generate matches for a category
   app.post("/api/categories/:id/generate-matches", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
