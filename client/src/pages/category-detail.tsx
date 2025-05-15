@@ -3,6 +3,7 @@ import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
+import { useGroupState } from "@/hooks/use-group-state";
 import { 
   Card, 
   CardContent, 
@@ -358,14 +359,11 @@ function GroupTeamCard({
 export default function CategoryDetail() {
   const { id, tournamentId } = useParams();
   const [, navigate] = useLocation();
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("teams");
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [createGroupsOpen, setCreateGroupsOpen] = useState(false);
   const [generateMatchesOpen, setGenerateMatchesOpen] = useState(false);
-  const [unassignedTeams, setUnassignedTeams] = useState<any[]>([]);
-  const [groupsWithTeams, setGroupsWithTeams] = useState<any[]>([]);
   
   // Setup DnD sensors
   const sensors = useSensors(
