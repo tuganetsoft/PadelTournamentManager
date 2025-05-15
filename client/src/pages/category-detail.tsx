@@ -1446,6 +1446,9 @@ export default function CategoryDetail() {
                                       }}
                                       onAssign={(groupId) => {
                                         assignTeamToGroup(team.id, groupId);
+                                        // Explicitly set unsaved changes flag
+                                        setHasUnsavedChanges(true);
+                                        console.log("Team assigned, setting hasUnsavedChanges to true");
                                       }}
                                     />
                                   ))}
@@ -1489,6 +1492,9 @@ export default function CategoryDetail() {
                                             targetGroupId, 
                                             assignment.id
                                           );
+                                          // Explicitly set unsaved changes flag
+                                          setHasUnsavedChanges(true);
+                                          console.log("Team moved, setting hasUnsavedChanges to true");
                                         }}
                                         onRemove={() => {
                                           removeTeamFromGroup(
