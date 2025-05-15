@@ -465,13 +465,57 @@ export default function CategoryDetail() {
     if (!over) return;
     
     const teamId = parseInt(active.id.toString());
+    
+    // Check if dropping in unassigned teams area
+    if (over.id === 'unassigned-teams') {
+      // Find which group the team is coming from
+      let sourceGroup: any = null;
+      let sourceAssignment: any = null;
+      
+      for (const group of groupsWithTeams) {
+        const assignment = group.assignments.find((a: any) => a.teamId === teamId);
+        if (assignment) {
+          sourceGroup = group;
+          sourceAssignment = assignment;
+          break;
+        }
+      }
+      
+      if (sourceGroup && sourceAssignment) {
+        // Move team back to unassigned
+        removeTeamFromGroup(teamId, sourceGroup.id, sourceAssignment.id);
+      }
+      return;
+    }
+    
+    // Check if dropping in a group
     const targetGroupId = over.id.toString().startsWith('group-') 
       ? parseInt(over.id.toString().replace('group-', ''))
       : null;
     
     if (targetGroupId) {
-      // Assign team to group
-      assignTeamToGroup(teamId, targetGroupId);
+      // Check if team is coming from another group
+      let sourceGroup: any = null;
+      let sourceAssignment: any = null;
+      
+      for (const group of groupsWithTeams) {
+        if (group.id === targetGroupId) continue; // Skip target group
+        
+        const assignment = group.assignments.find((a: any) => a.teamId === teamId);
+        if (assignment) {
+          sourceGroup = group;
+          sourceAssignment = assignment;
+          break;
+        }
+      }
+      
+      if (sourceGroup && sourceAssignment) {
+        // Move team from one group to another
+        moveTeamBetweenGroups(teamId, sourceGroup.id, targetGroupId, sourceAssignment.id);
+      } else {
+        // Assign team from unassigned to a group
+        assignTeamToGroup(teamId, targetGroupId);
+      }
     }
   };
 
@@ -534,6 +578,137 @@ export default function CategoryDetail() {
       
       toast({
         title: "Error assigning team",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Remove team from group and move back to unassigned
+  const removeTeamFromGroup = async (teamId: number, groupId: number, assignmentId: number) => {
+    try {
+      // Find the team in the group
+      let teamToMove: any = null;
+      
+      // Optimistic UI update
+      setGroupsWithTeams(prev => {
+        return prev.map(group => {
+          if (group.id === groupId) {
+            // Find the team before removing it
+            const assignment = group.assignments.find((a: any) => a.teamId === teamId);
+            if (assignment) {
+              teamToMove = assignment.team;
+            }
+            
+            // Remove the team from the group
+            return {
+              ...group,
+              assignments: group.assignments.filter((a: any) => a.teamId !== teamId)
+            };
+          }
+          return group;
+        });
+      });
+      
+      // Add to unassigned teams
+      if (teamToMove) {
+        setUnassignedTeams(prev => [...prev, teamToMove]);
+      }
+      
+      // Make the actual API call to delete the assignment
+      await apiRequest("DELETE", `/api/group-assignments/${assignmentId}`);
+      
+      // Update the data after successful removal
+      queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/details`] });
+      
+      toast({
+        title: "Team removed from group",
+        description: "Team has been moved back to unassigned teams",
+      });
+    } catch (error: any) {
+      // Revert optimistic update in case of error
+      queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      
+      toast({
+        title: "Error removing team",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Move team between groups
+  const moveTeamBetweenGroups = async (teamId: number, sourceGroupId: number, targetGroupId: number, assignmentId: number) => {
+    try {
+      // Find the team to move
+      let teamToMove: any = null;
+      
+      // Optimistic UI update
+      setGroupsWithTeams(prev => {
+        return prev.map(group => {
+          if (group.id === sourceGroupId) {
+            // Find the team before removing it
+            const assignment = group.assignments.find((a: any) => a.teamId === teamId);
+            if (assignment) {
+              teamToMove = assignment.team;
+            }
+            
+            // Remove from source group
+            return {
+              ...group,
+              assignments: group.assignments.filter((a: any) => a.teamId !== teamId)
+            };
+          } else if (group.id === targetGroupId && teamToMove) {
+            // Add to target group
+            return {
+              ...group,
+              assignments: [
+                ...group.assignments,
+                {
+                  id: -1, // Temporary ID until refresh
+                  groupId: targetGroupId,
+                  teamId,
+                  played: 0,
+                  won: 0,
+                  lost: 0,
+                  points: 0,
+                  team: teamToMove
+                }
+              ]
+            };
+          }
+          return group;
+        });
+      });
+      
+      // Delete the old assignment
+      await apiRequest("DELETE", `/api/group-assignments/${assignmentId}`);
+      
+      // Create the new assignment
+      await apiRequest("POST", "/api/group-assignments", {
+        groupId: targetGroupId,
+        teamId,
+        played: 0,
+        won: 0,
+        lost: 0,
+        points: 0,
+      });
+      
+      // Update the data after successful move
+      queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/details`] });
+      
+      toast({
+        title: "Team moved",
+        description: "Team has been moved to a different group",
+      });
+    } catch (error: any) {
+      // Revert optimistic update in case of error
+      queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+      
+      toast({
+        title: "Error moving team",
         description: error.message,
         variant: "destructive",
       });
@@ -897,7 +1072,10 @@ export default function CategoryDetail() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                               <h3 className="font-medium mb-4">Unassigned Teams</h3>
-                              <div className="border border-border rounded-md p-4 bg-muted min-h-[300px]">
+                              <div 
+                                id="unassigned-teams"
+                                className="border border-border rounded-md p-4 bg-muted min-h-[300px]"
+                              >
                                 <SortableContext 
                                   items={unassignedTeams.map(t => t.id.toString())}
                                   strategy={verticalListSortingStrategy}
