@@ -316,6 +316,7 @@ export default function CategoryDetail() {
     data: category,
     isLoading,
     error,
+    refetch,
   } = useQuery<CategoryDetail>({
     queryKey: [`/api/categories/${id}/details`],
     enabled: !!id,
