@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, ArrowLeft, Edit, PlusCircle, Trash, Trash2, Users, UserPlus, UserMinus, Loader2, GitBranch, FileText, Layers } from "lucide-react";
+import { AlertCircle, ArrowLeft, Edit, PlusCircle, Trash, Users, UserPlus, UserMinus, Loader2, GitBranch, FileText, Layers } from "lucide-react";
 import { TeamForm } from "@/components/team-form";
 import { TeamEditForm } from "@/components/team-edit-form";
 import { EliminationBracket } from "@/components/elimination-bracket";
@@ -1400,7 +1400,7 @@ export default function CategoryDetail() {
                                   onSuccess={() => queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] })}
                                 >
                                   <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <Edit2 className="h-4 w-4" />
+                                    <Edit className="h-4 w-4" />
                                   </Button>
                                 </TeamEditForm>
                                 <Button 
@@ -1413,7 +1413,7 @@ export default function CategoryDetail() {
                                   {deleteTeamMutation.isPending && deleteTeamMutation.variables === team.id ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash className="h-4 w-4" />
                                   )}
                                 </Button>
                               </div>
@@ -1491,14 +1491,15 @@ export default function CategoryDetail() {
                                 id="unassigned-teams"
                                 className="border border-border rounded-md p-4 bg-muted min-h-[300px]"
                               >
-                                <SortableContext 
-                                  items={unassignedTeams.map(t => t.id.toString())}
-                                  strategy={verticalListSortingStrategy}
-                                >
+                                <div className="space-y-4">
                                   {unassignedTeams.map(team => (
-                                    <SortableTeamItem key={team.id} team={team} />
+                                    <UnassignedTeamItem 
+                                      key={team.id} 
+                                      id={team.id.toString()} 
+                                      team={team} 
+                                    />
                                   ))}
-                                </SortableContext>
+                                </div>
                                 
                                 {unassignedTeams.length === 0 && (
                                   <div className="text-center py-8 text-muted-foreground">
