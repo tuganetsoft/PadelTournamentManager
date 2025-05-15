@@ -393,10 +393,7 @@ export default function TournamentDetail() {
                   <CategoryCard 
                     key={category.id} 
                     category={category} 
-                    onClick={() => {
-                      setActiveTab("categories");
-                      setActiveCategoryId(category.id);
-                    }}
+                    onClick={() => navigate(`/tournaments/${id}/categories/${category.id}`)}
                   />
                 ))}
               </div>
@@ -419,7 +416,7 @@ export default function TournamentDetail() {
                   <CategoryCard 
                     key={category.id} 
                     category={category} 
-                    onClick={() => setActiveCategoryId(category.id)}
+                    onClick={() => navigate(`/tournaments/${id}/categories/${category.id}`)}
                   />
                 ))}
               </div>
