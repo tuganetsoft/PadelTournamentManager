@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, PlusCircle, Trash2, Users, UserPlus, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, PlusCircle, Trash2, Users, UserPlus, Loader2 } from "lucide-react";
 import { TeamForm } from "@/components/team-form";
 import { EliminationBracket } from "@/components/elimination-bracket";
 import { TournamentStandings } from "@/components/tournament-standings";
@@ -558,19 +558,26 @@ export default function CategoryDetail() {
                       <PlusCircle className="mr-2 h-4 w-4" />
                       Create Groups
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      className="w-full justify-start"
-                      onClick={() => autoAssignTeamsMutation.mutate()}
-                      disabled={autoAssignTeamsMutation.isPending}
-                    >
-                      {autoAssignTeamsMutation.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Users className="mr-2 h-4 w-4" />
-                      )}
-                      Auto-Assign Teams
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={() => autoAssignTeamsMutation.mutate()}
+                          disabled={autoAssignTeamsMutation.isPending}
+                        >
+                          {autoAssignTeamsMutation.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Users className="mr-2 h-4 w-4" />
+                          )}
+                          Auto-Assign Teams
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>Evenly distributes teams across groups. Seeded teams are assigned first to ensure balanced competition.</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </>
                 )}
                 <Button 
