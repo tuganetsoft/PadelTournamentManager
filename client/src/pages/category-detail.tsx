@@ -161,12 +161,22 @@ const createGroupSchema = z.object({
 
 // Schema for match generation
 const generateMatchesSchema = z.object({
-  matchType: z.enum(["GROUP_STAGE", "KNOCKOUT"]),
+  matchType: z.enum(["ROUND_ROBIN", "SINGLE_ELIMINATION"]),
   autoAssignCourts: z.boolean().default(false),
 });
 
+// Define Team type for drag and drop
+type Team = {
+  id: number;
+  name: string;
+  player1: string;
+  player2?: string;
+  categoryId: number;
+  seeded?: boolean;
+};
+
 // Sortable Team Item component for drag and drop
-function SortableTeamItem({ team, groupId }: { team: any, groupId?: number }) {
+function SortableTeamItem({ team, groupId }: { team: Team, groupId?: number }) {
   const {
     attributes,
     listeners,
@@ -379,14 +389,76 @@ export default function CategoryDetail() {
   // Auto-assign teams to groups mutation
   const autoAssignTeamsMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", `/api/categories/${id}/auto-assign-teams`, {});
-      return { success: true };
+      const response = await apiRequest("POST", `/api/categories/${id}/auto-assign-teams`, {});
+      return await response.json();
     },
     onSuccess: () => {
       toast({
         title: "Teams assigned",
         description: "Teams have been automatically assigned to groups",
       });
+      
+      // Optimistic UI update to show teams as assigned
+      // Move all unassigned teams to groups (rough estimation since we don't know exact group assignment)
+      if (category && groupsWithTeams.length > 0) {
+        const teams = [...unassignedTeams];
+        setUnassignedTeams([]); // Clear unassigned teams
+        
+        // Distribute teams evenly across groups (not the real algorithm but a visual estimation)
+        const updatedGroups = [...groupsWithTeams];
+        let groupIndex = 0;
+        
+        // First assign seeded teams
+        const seededTeams = teams.filter(team => team.seeded);
+        for (const team of seededTeams) {
+          if (groupIndex >= updatedGroups.length) groupIndex = 0;
+          
+          updatedGroups[groupIndex] = {
+            ...updatedGroups[groupIndex],
+            assignments: [
+              ...updatedGroups[groupIndex].assignments,
+              {
+                id: -1, // Temporary ID
+                groupId: updatedGroups[groupIndex].id,
+                teamId: team.id,
+                played: 0,
+                won: 0,
+                lost: 0,
+                points: 0,
+                team: team
+              }
+            ]
+          };
+          groupIndex++;
+        }
+        
+        // Then assign non-seeded teams
+        const nonSeededTeams = teams.filter(team => !team.seeded);
+        for (const team of nonSeededTeams) {
+          if (groupIndex >= updatedGroups.length) groupIndex = 0;
+          
+          updatedGroups[groupIndex] = {
+            ...updatedGroups[groupIndex],
+            assignments: [
+              ...updatedGroups[groupIndex].assignments,
+              {
+                id: -1, // Temporary ID
+                groupId: updatedGroups[groupIndex].id,
+                teamId: team.id,
+                played: 0,
+                won: 0,
+                lost: 0,
+                points: 0,
+                team: team
+              }
+            ]
+          };
+          groupIndex++;
+        }
+        
+        setGroupsWithTeams(updatedGroups);
+      }
+      
       // Refetch category details data
       queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
       // Also refresh any list that might show this category
@@ -398,39 +470,137 @@ export default function CategoryDetail() {
         description: error.message,
         variant: "destructive",
       });
+      
+      // Revert any optimistic UI updates
+      if (category) {
+        const assignedTeamIds = category.groups.flatMap(g => 
+          g.assignments.map(a => a.teamId)
+        );
+        
+        const unassigned = category.teams.filter(
+          team => !assignedTeamIds.includes(team.id)
+        );
+
+        setUnassignedTeams(unassigned);
+        setGroupsWithTeams(category.groups);
+      }
     }
   });
 
   // Generate matches mutation
   const generateMatchesMutation = useMutation({
     mutationFn: async (data: z.infer<typeof generateMatchesSchema>) => {
-      await apiRequest("POST", `/api/categories/${id}/generate-matches`, {
+      const response = await apiRequest("POST", `/api/categories/${id}/generate-matches`, {
         matchType: data.matchType,
         autoAssignCourts: data.autoAssignCourts,
       });
-      return { success: true };
+      return await response.json();
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast({
         title: "Matches generated",
         description: "Matches have been successfully generated",
       });
       generateMatchesForm.reset();
       setGenerateMatchesOpen(false);
+      
+      // Optimistic UI update to show generated matches
+      if (category) {
+        // In reality we'd know exactly what matches were generated from the API response
+        // Here we're just doing a simple display estimation for immediate feedback
+        
+        // Create "loading" matches to show in the UI until the real data loads
+        let placeholderMatches = [];
+        const matchType = generateMatchesForm.getValues().matchType || "ROUND_ROBIN";
+        
+        if (matchType === "ROUND_ROBIN" && category.groups.length > 0) {
+          // For round robin, create placeholder matches between teams in each group
+          for (const group of category.groups) {
+            const teamIds = group.assignments.map(a => a.teamId);
+            
+            // Create a match between each pair of teams
+            for (let i = 0; i < teamIds.length; i++) {
+              for (let j = i + 1; j < teamIds.length; j++) {
+                const teamA = group.assignments[i].team;
+                const teamB = group.assignments[j].team;
+                
+                placeholderMatches.push({
+                  id: -1 * (placeholderMatches.length + 1), // Temporary negative ID
+                  categoryId: Number(id),
+                  teamAId: teamIds[i],
+                  teamBId: teamIds[j],
+                  groupId: group.id,
+                  completed: false,
+                  teamA,
+                  teamB
+                });
+              }
+            }
+          }
+        } else if (matchType === "SINGLE_ELIMINATION") {
+          // For single elimination, create a simple bracket structure
+          const allTeams = category.teams;
+          const teamCount = allTeams.length;
+          const rounds = Math.ceil(Math.log2(teamCount));
+          
+          // Create first round matches
+          for (let i = 0; i < Math.floor(teamCount / 2); i++) {
+            placeholderMatches.push({
+              id: -1 * (placeholderMatches.length + 1),
+              categoryId: Number(id),
+              teamAId: allTeams[i * 2].id,
+              teamBId: allTeams[i * 2 + 1].id,
+              round: "R1",
+              completed: false,
+              teamA: allTeams[i * 2],
+              teamB: allTeams[i * 2 + 1]
+            });
+          }
+          
+          // Add remaining rounds as placeholder matches with unknown teams
+          for (let r = 2; r <= rounds; r++) {
+            const matchesInRound = Math.pow(2, rounds - r);
+            for (let i = 0; i < matchesInRound; i++) {
+              placeholderMatches.push({
+                id: -1 * (placeholderMatches.length + 1),
+                categoryId: Number(id),
+                teamAId: 0, // Unknown until previous match is completed
+                teamBId: 0, // Unknown until previous match is completed
+                round: `R${r}`,
+                completed: false
+              });
+            }
+          }
+        }
+        
+        // Update the UI with the placeholder matches
+        const updatedCategory = {
+          ...category,
+          matches: [...category.matches, ...placeholderMatches]
+        };
+        
+        // Force an optimistic UI update using setTimeout to avoid React batch updates
+        // This isn't needed with proper state management, but helps guarantee UI refresh
+        setTimeout(() => {
+          if (updatedCategory) {
+            const assignedTeamIds = updatedCategory.groups.flatMap(g => 
+              g.assignments.map(a => a.teamId)
+            );
+            
+            const unassigned = updatedCategory.teams.filter(
+              team => !assignedTeamIds.includes(team.id)
+            );
+            
+            setUnassignedTeams(unassigned);
+            setGroupsWithTeams(updatedCategory.groups);
+          }
+        }, 100);
+      }
+      
       // Refetch category details data
       queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
       // Also refresh any list that might show this category
       queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournamentId}/details`] });
-      // Force update in the UI by refetching group and match data
-      setTimeout(() => {
-        if (category) {
-          const unassigned = category.teams.filter(
-            team => !category.groups.flatMap(g => g.assignments.map(a => a.teamId)).includes(team.id)
-          );
-          setUnassignedTeams(unassigned);
-          setGroupsWithTeams(category.groups);
-        }
-      }, 500);
     },
     onError: (error: Error) => {
       toast({
