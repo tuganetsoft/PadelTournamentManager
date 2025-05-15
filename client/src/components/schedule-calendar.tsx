@@ -36,7 +36,7 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
   ];
 
   // Get all matches scheduled for the selected date
-  const scheduledMatches = tournament.matches.filter((match: any) => {
+  const scheduledMatches = tournament?.matches?.filter((match: any) => {
     if (!match.scheduledTime) return false;
     try {
       const matchDate = parseISO(match.scheduledTime);
@@ -45,12 +45,12 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
       console.error("Invalid date format:", match.scheduledTime);
       return false;
     }
-  });
+  }) || [];
 
   // Unscheduled matches are those that don't have a scheduledTime or courtId
-  const unscheduledMatches = tournament.matches.filter((match: any) => 
+  const unscheduledMatches = tournament?.matches?.filter((match: any) => 
     !match.scheduledTime || !match.courtId
-  );
+  ) || [];
 
   // Simple color generator based on courtId
   const getCourtColor = (courtId: number) => {
@@ -235,7 +235,7 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
           <div 
             className="grid" 
             style={{
-              gridTemplateColumns: `50px repeat(${venues.flatMap(v => v.courts).length}, minmax(100px, 120px))`,
+              gridTemplateColumns: `50px repeat(${venues?.flatMap(v => v.courts)?.length || 0}, minmax(100px, 120px))`,
               minWidth: '800px',
               width: 'max-content'
             }}
@@ -256,8 +256,8 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
             </div>
 
             {/* Courts */}
-            {venues.flatMap(venue => 
-              venue.courts.map((court: any) => {
+            {venues?.flatMap(venue => 
+              venue.courts?.map((court: any) => {
                 const courtColor = getCourtColor(court.id);
                 const bgColor = hexToRgba(courtColor, 0.15);
                 
