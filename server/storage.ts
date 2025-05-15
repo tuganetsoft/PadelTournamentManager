@@ -7,11 +7,24 @@ import {
   Team, InsertTeam,
   Group, InsertGroup,
   GroupAssignment, InsertGroupAssignment,
-  Match, InsertMatch
+  Match, InsertMatch,
+  users,
+  tournaments,
+  venues,
+  courts,
+  categories,
+  teams,
+  groups,
+  groupAssignments,
+  matches
 } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import connectPg from "connect-pg-simple";
+import { db, pool } from "./db";
+import { eq, and } from "drizzle-orm";
 
+const PostgresSessionStore = connectPg(session);
 const MemoryStore = createMemoryStore(session);
 
 // modify the interface with any CRUD methods
@@ -80,391 +93,338 @@ export interface IStorage {
   deleteMatch(id: number): Promise<void>;
 
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private tournaments: Map<number, Tournament>;
-  private venues: Map<number, Venue>;
-  private courts: Map<number, Court>;
-  private categories: Map<number, Category>;
-  private teams: Map<number, Team>;
-  private groups: Map<number, Group>;
-  private groupAssignments: Map<number, GroupAssignment>;
-  private matches: Map<number, Match>;
-
-  private userIdCounter: number = 1;
-  private tournamentIdCounter: number = 1;
-  private venueIdCounter: number = 1;
-  private courtIdCounter: number = 1;
-  private categoryIdCounter: number = 1;
-  private teamIdCounter: number = 1;
-  private groupIdCounter: number = 1;
-  private groupAssignmentIdCounter: number = 1;
-  private matchIdCounter: number = 1;
-
-  sessionStore: session.SessionStore;
+export class DatabaseStorage implements IStorage {
+  sessionStore: session.Store;
 
   constructor() {
-    this.users = new Map();
-    this.tournaments = new Map();
-    this.venues = new Map();
-    this.courts = new Map();
-    this.categories = new Map();
-    this.teams = new Map();
-    this.groups = new Map();
-    this.groupAssignments = new Map();
-    this.matches = new Map();
-    
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true
     });
   }
 
   // User operations
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username
-    );
+    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    return result[0];
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userIdCounter++;
-    const user: User = { 
-      ...insertUser, 
-      id,
-      createdAt: new Date() 
-    };
-    this.users.set(id, user);
-    return user;
+  async createUser(user: InsertUser): Promise<User> {
+    const result = await db.insert(users).values(user).returning();
+    return result[0];
   }
 
   // Tournament operations
   async getAllTournaments(): Promise<Tournament[]> {
-    return Array.from(this.tournaments.values());
+    return await db.select().from(tournaments);
   }
 
   async getTournamentsByUserId(userId: number): Promise<Tournament[]> {
-    return Array.from(this.tournaments.values()).filter(
-      (tournament) => tournament.userId === userId
-    );
+    return await db.select().from(tournaments).where(eq(tournaments.userId, userId));
   }
 
   async getTournament(id: number): Promise<Tournament | undefined> {
-    return this.tournaments.get(id);
+    const result = await db.select().from(tournaments).where(eq(tournaments.id, id)).limit(1);
+    return result[0];
   }
 
-  async createTournament(insertTournament: InsertTournament): Promise<Tournament> {
-    const id = this.tournamentIdCounter++;
-    const tournament: Tournament = { 
-      ...insertTournament, 
-      id,
-      createdAt: new Date()
-    };
-    this.tournaments.set(id, tournament);
-    return tournament;
+  async createTournament(tournament: InsertTournament): Promise<Tournament> {
+    const result = await db.insert(tournaments).values(tournament).returning();
+    return result[0];
   }
 
   async updateTournament(id: number, data: Partial<Tournament>): Promise<Tournament> {
-    const tournament = this.tournaments.get(id);
-    if (!tournament) {
+    const result = await db.update(tournaments)
+      .set(data)
+      .where(eq(tournaments.id, id))
+      .returning();
+    
+    if (result.length === 0) {
       throw new Error(`Tournament with ID ${id} not found`);
     }
     
-    const updatedTournament = { ...tournament, ...data };
-    this.tournaments.set(id, updatedTournament);
-    return updatedTournament;
+    return result[0];
   }
 
   async deleteTournament(id: number): Promise<void> {
-    // Delete all related entities first (categories, teams, matches, etc.)
-    // Get all venues for this tournament
-    const venues = await this.getVenuesByTournamentId(id);
-    for (const venue of venues) {
+    // Delete all related entities (using cascade would be better in a real DB)
+    
+    // Get venues to delete courts
+    const venuesList = await this.getVenuesByTournamentId(id);
+    for (const venue of venuesList) {
       await this.deleteVenue(venue.id);
     }
     
-    // Get all categories for this tournament
-    const categories = await this.getCategoriesByTournamentId(id);
-    for (const category of categories) {
+    // Categories have teams, groups, matches
+    const categoriesList = await this.getCategoriesByTournamentId(id);
+    for (const category of categoriesList) {
       await this.deleteCategory(category.id);
     }
     
-    this.tournaments.delete(id);
+    // Finally delete the tournament
+    await db.delete(tournaments).where(eq(tournaments.id, id));
   }
 
   // Venue operations
   async getVenue(id: number): Promise<Venue | undefined> {
-    return this.venues.get(id);
+    const result = await db.select().from(venues).where(eq(venues.id, id)).limit(1);
+    return result[0];
   }
 
   async getVenuesByTournamentId(tournamentId: number): Promise<Venue[]> {
-    return Array.from(this.venues.values()).filter(
-      (venue) => venue.tournamentId === tournamentId
-    );
+    return await db.select().from(venues).where(eq(venues.tournamentId, tournamentId));
   }
 
-  async createVenue(insertVenue: InsertVenue): Promise<Venue> {
-    const id = this.venueIdCounter++;
-    const venue: Venue = { ...insertVenue, id };
-    this.venues.set(id, venue);
-    return venue;
+  async createVenue(venue: InsertVenue): Promise<Venue> {
+    const result = await db.insert(venues).values(venue).returning();
+    return result[0];
   }
 
   async updateVenue(id: number, data: Partial<Venue>): Promise<Venue> {
-    const venue = this.venues.get(id);
-    if (!venue) {
+    const result = await db.update(venues)
+      .set(data)
+      .where(eq(venues.id, id))
+      .returning();
+    
+    if (result.length === 0) {
       throw new Error(`Venue with ID ${id} not found`);
     }
     
-    const updatedVenue = { ...venue, ...data };
-    this.venues.set(id, updatedVenue);
-    return updatedVenue;
+    return result[0];
   }
 
   async deleteVenue(id: number): Promise<void> {
     // Delete all courts for this venue
-    const courts = await this.getCourtsByVenueId(id);
-    for (const court of courts) {
-      await this.deleteCourt(court.id);
-    }
+    await db.delete(courts).where(eq(courts.venueId, id));
     
-    this.venues.delete(id);
+    // Delete the venue
+    await db.delete(venues).where(eq(venues.id, id));
   }
 
   // Court operations
   async getCourt(id: number): Promise<Court | undefined> {
-    return this.courts.get(id);
+    const result = await db.select().from(courts).where(eq(courts.id, id)).limit(1);
+    return result[0];
   }
 
   async getCourtsByVenueId(venueId: number): Promise<Court[]> {
-    return Array.from(this.courts.values()).filter(
-      (court) => court.venueId === venueId
-    );
+    return await db.select().from(courts).where(eq(courts.venueId, venueId));
   }
 
-  async createCourt(insertCourt: InsertCourt): Promise<Court> {
-    const id = this.courtIdCounter++;
-    const court: Court = { ...insertCourt, id };
-    this.courts.set(id, court);
-    return court;
+  async createCourt(court: InsertCourt): Promise<Court> {
+    const result = await db.insert(courts).values(court).returning();
+    return result[0];
   }
 
   async updateCourt(id: number, data: Partial<Court>): Promise<Court> {
-    const court = this.courts.get(id);
-    if (!court) {
+    const result = await db.update(courts)
+      .set(data)
+      .where(eq(courts.id, id))
+      .returning();
+    
+    if (result.length === 0) {
       throw new Error(`Court with ID ${id} not found`);
     }
     
-    const updatedCourt = { ...court, ...data };
-    this.courts.set(id, updatedCourt);
-    return updatedCourt;
+    return result[0];
   }
 
   async deleteCourt(id: number): Promise<void> {
-    this.courts.delete(id);
+    await db.delete(courts).where(eq(courts.id, id));
   }
 
   // Category operations
   async getCategory(id: number): Promise<Category | undefined> {
-    return this.categories.get(id);
+    const result = await db.select().from(categories).where(eq(categories.id, id)).limit(1);
+    return result[0];
   }
 
   async getCategoriesByTournamentId(tournamentId: number): Promise<Category[]> {
-    return Array.from(this.categories.values()).filter(
-      (category) => category.tournamentId === tournamentId
-    );
+    return await db.select().from(categories).where(eq(categories.tournamentId, tournamentId));
   }
 
-  async createCategory(insertCategory: InsertCategory): Promise<Category> {
-    const id = this.categoryIdCounter++;
-    const category: Category = { ...insertCategory, id };
-    this.categories.set(id, category);
-    return category;
+  async createCategory(category: InsertCategory): Promise<Category> {
+    const result = await db.insert(categories).values(category).returning();
+    return result[0];
   }
 
   async updateCategory(id: number, data: Partial<Category>): Promise<Category> {
-    const category = this.categories.get(id);
-    if (!category) {
+    const result = await db.update(categories)
+      .set(data)
+      .where(eq(categories.id, id))
+      .returning();
+    
+    if (result.length === 0) {
       throw new Error(`Category with ID ${id} not found`);
     }
     
-    const updatedCategory = { ...category, ...data };
-    this.categories.set(id, updatedCategory);
-    return updatedCategory;
+    return result[0];
   }
 
   async deleteCategory(id: number): Promise<void> {
     // Delete all teams, groups, and matches for this category
-    const teams = await this.getTeamsByCategoryId(id);
-    for (const team of teams) {
-      await this.deleteTeam(team.id);
+    await db.delete(teams).where(eq(teams.categoryId, id));
+    
+    // Get groups to delete assignments
+    const groupsList = await this.getGroupsByCategoryId(id);
+    for (const group of groupsList) {
+      await db.delete(groupAssignments).where(eq(groupAssignments.groupId, group.id));
     }
     
-    const groups = await this.getGroupsByCategoryId(id);
-    for (const group of groups) {
-      await this.deleteGroup(group.id);
-    }
+    // Delete all groups
+    await db.delete(groups).where(eq(groups.categoryId, id));
     
-    const matches = await this.getMatchesByCategoryId(id);
-    for (const match of matches) {
-      await this.deleteMatch(match.id);
-    }
+    // Delete all matches
+    await db.delete(matches).where(eq(matches.categoryId, id));
     
-    this.categories.delete(id);
+    // Delete the category
+    await db.delete(categories).where(eq(categories.id, id));
   }
 
   // Team operations
   async getTeam(id: number): Promise<Team | undefined> {
-    return this.teams.get(id);
+    const result = await db.select().from(teams).where(eq(teams.id, id)).limit(1);
+    return result[0];
   }
 
   async getTeamsByCategoryId(categoryId: number): Promise<Team[]> {
-    return Array.from(this.teams.values()).filter(
-      (team) => team.categoryId === categoryId
-    );
+    return await db.select().from(teams).where(eq(teams.categoryId, categoryId));
   }
 
-  async createTeam(insertTeam: InsertTeam): Promise<Team> {
-    const id = this.teamIdCounter++;
-    const team: Team = { ...insertTeam, id };
-    this.teams.set(id, team);
-    return team;
+  async createTeam(team: InsertTeam): Promise<Team> {
+    const result = await db.insert(teams).values(team).returning();
+    return result[0];
   }
 
   async updateTeam(id: number, data: Partial<Team>): Promise<Team> {
-    const team = this.teams.get(id);
-    if (!team) {
+    const result = await db.update(teams)
+      .set(data)
+      .where(eq(teams.id, id))
+      .returning();
+    
+    if (result.length === 0) {
       throw new Error(`Team with ID ${id} not found`);
     }
     
-    const updatedTeam = { ...team, ...data };
-    this.teams.set(id, updatedTeam);
-    return updatedTeam;
+    return result[0];
   }
 
   async deleteTeam(id: number): Promise<void> {
-    // Delete all group assignments for this team
-    const assignments = Array.from(this.groupAssignments.values()).filter(
-      (assignment) => assignment.teamId === id
-    );
+    // Delete all related assignments
+    await db.delete(groupAssignments).where(eq(groupAssignments.teamId, id));
     
-    for (const assignment of assignments) {
-      await this.deleteGroupAssignment(assignment.id);
-    }
-    
-    this.teams.delete(id);
+    // Delete the team
+    await db.delete(teams).where(eq(teams.id, id));
   }
 
   // Group operations
   async getGroup(id: number): Promise<Group | undefined> {
-    return this.groups.get(id);
+    const result = await db.select().from(groups).where(eq(groups.id, id)).limit(1);
+    return result[0];
   }
 
   async getGroupsByCategoryId(categoryId: number): Promise<Group[]> {
-    return Array.from(this.groups.values()).filter(
-      (group) => group.categoryId === categoryId
-    );
+    return await db.select().from(groups).where(eq(groups.categoryId, categoryId));
   }
 
-  async createGroup(insertGroup: InsertGroup): Promise<Group> {
-    const id = this.groupIdCounter++;
-    const group: Group = { ...insertGroup, id };
-    this.groups.set(id, group);
-    return group;
+  async createGroup(group: InsertGroup): Promise<Group> {
+    const result = await db.insert(groups).values(group).returning();
+    return result[0];
   }
 
   async updateGroup(id: number, data: Partial<Group>): Promise<Group> {
-    const group = this.groups.get(id);
-    if (!group) {
+    const result = await db.update(groups)
+      .set(data)
+      .where(eq(groups.id, id))
+      .returning();
+    
+    if (result.length === 0) {
       throw new Error(`Group with ID ${id} not found`);
     }
     
-    const updatedGroup = { ...group, ...data };
-    this.groups.set(id, updatedGroup);
-    return updatedGroup;
+    return result[0];
   }
 
   async deleteGroup(id: number): Promise<void> {
-    // Delete all group assignments for this group
-    const assignments = await this.getGroupAssignmentsByGroupId(id);
-    for (const assignment of assignments) {
-      await this.deleteGroupAssignment(assignment.id);
-    }
+    // Delete all assignments
+    await db.delete(groupAssignments).where(eq(groupAssignments.groupId, id));
     
-    this.groups.delete(id);
+    // Delete the group
+    await db.delete(groups).where(eq(groups.id, id));
   }
 
   // Group Assignment operations
   async getGroupAssignment(id: number): Promise<GroupAssignment | undefined> {
-    return this.groupAssignments.get(id);
+    const result = await db.select().from(groupAssignments).where(eq(groupAssignments.id, id)).limit(1);
+    return result[0];
   }
 
   async getGroupAssignmentsByGroupId(groupId: number): Promise<GroupAssignment[]> {
-    return Array.from(this.groupAssignments.values()).filter(
-      (assignment) => assignment.groupId === groupId
-    );
+    return await db.select().from(groupAssignments).where(eq(groupAssignments.groupId, groupId));
   }
 
-  async createGroupAssignment(insertAssignment: InsertGroupAssignment): Promise<GroupAssignment> {
-    const id = this.groupAssignmentIdCounter++;
-    const assignment: GroupAssignment = { ...insertAssignment, id };
-    this.groupAssignments.set(id, assignment);
-    return assignment;
+  async createGroupAssignment(assignment: InsertGroupAssignment): Promise<GroupAssignment> {
+    const result = await db.insert(groupAssignments).values(assignment).returning();
+    return result[0];
   }
 
   async updateGroupAssignment(id: number, data: Partial<GroupAssignment>): Promise<GroupAssignment> {
-    const assignment = this.groupAssignments.get(id);
-    if (!assignment) {
+    const result = await db.update(groupAssignments)
+      .set(data)
+      .where(eq(groupAssignments.id, id))
+      .returning();
+    
+    if (result.length === 0) {
       throw new Error(`Group assignment with ID ${id} not found`);
     }
     
-    const updatedAssignment = { ...assignment, ...data };
-    this.groupAssignments.set(id, updatedAssignment);
-    return updatedAssignment;
+    return result[0];
   }
 
   async deleteGroupAssignment(id: number): Promise<void> {
-    this.groupAssignments.delete(id);
+    await db.delete(groupAssignments).where(eq(groupAssignments.id, id));
   }
 
   // Match operations
   async getMatch(id: number): Promise<Match | undefined> {
-    return this.matches.get(id);
+    const result = await db.select().from(matches).where(eq(matches.id, id)).limit(1);
+    return result[0];
   }
 
   async getMatchesByCategoryId(categoryId: number): Promise<Match[]> {
-    return Array.from(this.matches.values()).filter(
-      (match) => match.categoryId === categoryId
-    );
+    return await db.select().from(matches).where(eq(matches.categoryId, categoryId));
   }
 
-  async createMatch(insertMatch: InsertMatch): Promise<Match> {
-    const id = this.matchIdCounter++;
-    const match: Match = { ...insertMatch, id };
-    this.matches.set(id, match);
-    return match;
+  async createMatch(match: InsertMatch): Promise<Match> {
+    const result = await db.insert(matches).values(match).returning();
+    return result[0];
   }
 
   async updateMatch(id: number, data: Partial<Match>): Promise<Match> {
-    const match = this.matches.get(id);
-    if (!match) {
+    const result = await db.update(matches)
+      .set(data)
+      .where(eq(matches.id, id))
+      .returning();
+    
+    if (result.length === 0) {
       throw new Error(`Match with ID ${id} not found`);
     }
     
-    const updatedMatch = { ...match, ...data };
-    this.matches.set(id, updatedMatch);
-    return updatedMatch;
+    return result[0];
   }
 
   async deleteMatch(id: number): Promise<void> {
-    this.matches.delete(id);
+    await db.delete(matches).where(eq(matches.id, id));
   }
 }
 
-export const storage = new MemStorage();
+// Use the database storage instead of in-memory
+export const storage = new DatabaseStorage();
