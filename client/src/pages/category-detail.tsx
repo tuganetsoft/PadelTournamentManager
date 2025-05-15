@@ -358,6 +358,7 @@ function GroupTeamCard({
 
 export default function CategoryDetail() {
   const { id, tournamentId } = useParams();
+  const categoryId = parseInt(id as string);
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("teams");
@@ -741,24 +742,24 @@ export default function CategoryDetail() {
     }
   });
 
-  // Prepare teams and groups data for drag-and-drop interface
-  useEffect(() => {
-    if (category) {
-      // Get all teams that are not assigned to any group
-      const assignedTeamIds = category.groups.flatMap(g => 
-        g.assignments.map(a => a.teamId)
-      );
-      
-      const unassigned = category.teams.filter(
-        team => !assignedTeamIds.includes(team.id)
-      );
+  // Use our custom group state manager
+  const {
+    groups: groupsWithTeams,
+    unassignedTeams,
+    hasUnsavedChanges,
+    assignTeam,
+    removeTeam,
+    moveTeam,
+    saveAssignments,
+    autoAssignTeams,
+    resetAssignments
+  } = useGroupState(
+    categoryId,
+    category ? category.groups : [],
+    category ? category.teams : []
+  );
 
-      setUnassignedTeams(unassigned);
-      setGroupsWithTeams(category.groups);
-    }
-  }, [category]);
-
-  // Handle drag end for team assignment
+  // Handle drag end for team assignment using our new hook
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
@@ -769,21 +770,19 @@ export default function CategoryDetail() {
     // Check if dropping in unassigned teams area
     if (over.id === 'unassigned-teams') {
       // Find which group the team is coming from
-      let sourceGroup: any = null;
-      let sourceAssignment: any = null;
+      let sourceGroupId: number | null = null;
       
       for (const group of groupsWithTeams) {
-        const assignment = group.assignments.find((a: any) => a.teamId === teamId);
+        const assignment = group.assignments.find(a => a.teamId === teamId);
         if (assignment) {
-          sourceGroup = group;
-          sourceAssignment = assignment;
+          sourceGroupId = group.id;
           break;
         }
       }
       
-      if (sourceGroup && sourceAssignment) {
-        // Move team back to unassigned
-        removeTeamFromGroup(teamId, sourceGroup.id, sourceAssignment.id);
+      if (sourceGroupId) {
+        // Move team back to unassigned using our hook
+        removeTeam(teamId, sourceGroupId);
       }
       return;
     }
@@ -795,26 +794,28 @@ export default function CategoryDetail() {
     
     if (targetGroupId) {
       // Check if team is coming from another group
-      let sourceGroup: any = null;
-      let sourceAssignment: any = null;
+      let sourceGroupId: number | null = null;
       
       for (const group of groupsWithTeams) {
         if (group.id === targetGroupId) continue; // Skip target group
         
-        const assignment = group.assignments.find((a: any) => a.teamId === teamId);
+        const assignment = group.assignments.find(a => a.teamId === teamId);
         if (assignment) {
-          sourceGroup = group;
-          sourceAssignment = assignment;
+          sourceGroupId = group.id;
           break;
         }
       }
       
-      if (sourceGroup && sourceAssignment) {
-        // Move team from one group to another
-        moveTeamBetweenGroups(teamId, sourceGroup.id, targetGroupId, sourceAssignment.id);
+      if (sourceGroupId) {
+        // Move from one group to another using our hook
+        moveTeam(teamId, sourceGroupId, targetGroupId);
       } else {
-        // Assign team from unassigned to a group
-        assignTeamToGroup(teamId, targetGroupId);
+        // Check if team is coming from unassigned teams
+        const team = unassignedTeams.find(t => t.id === teamId);
+        if (team) {
+          // Assign unassigned team to group using our hook
+          assignTeam(teamId, targetGroupId);
+        }
       }
     }
   };
