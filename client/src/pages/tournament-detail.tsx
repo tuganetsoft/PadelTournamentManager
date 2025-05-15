@@ -512,7 +512,7 @@ export default function TournamentDetail() {
                               variant="ghost" 
                               size="icon" 
                               className="h-7 w-7"
-                              onClick={() => navigate(`/categories/${category.id}`)}
+                              onClick={() => navigate(`/tournaments/${id}/categories/${category.id}`)}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
