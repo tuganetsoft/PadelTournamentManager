@@ -9,11 +9,105 @@ import { CategoryCard } from "@/components/category-card";
 import { CategoryForm } from "@/components/category-form";
 import { TeamForm } from "@/components/team-form";
 import { VenueForm } from "@/components/venue-form";
+import { CourtForm } from "@/components/court-form";
 import { ScheduleCalendar } from "@/components/schedule-calendar";
 import { TournamentStandings } from "@/components/tournament-standings";
 import { EliminationBracket } from "@/components/elimination-bracket";
 import { format } from "date-fns";
 import { ArrowLeft, Edit, ExternalLink, Share2 } from "lucide-react";
+
+// Tournament detail type for better type safety
+interface TournamentDetail {
+  id: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  description?: string;
+  externalLink?: string;
+  imageUrl?: string;
+  userId: number;
+  createdAt: string;
+  venues: Array<{
+    id: number;
+    name: string;
+    address?: string;
+    tournamentId: number;
+    courts: Array<{
+      id: number;
+      name: string;
+      venueId: number;
+    }>;
+  }>;
+  categories: Array<{
+    id: number;
+    name: string;
+    format: string;
+    matchDuration: number;
+    status: string;
+    tournamentId: number;
+    teams: Array<{
+      id: number;
+      name: string;
+      player1: string;
+      player2?: string;
+      categoryId: number;
+    }>;
+    groups: Array<{
+      id: number;
+      name: string;
+      categoryId: number;
+      assignments: Array<{
+        id: number;
+        groupId: number;
+        teamId: number;
+        played: number;
+        won: number;
+        lost: number;
+        points: number;
+        team: {
+          id: number;
+          name: string;
+          player1: string;
+          player2?: string;
+          categoryId: number;
+        };
+      }>;
+    }>;
+    matches: Array<{
+      id: number;
+      categoryId: number;
+      teamAId: number;
+      teamBId: number;
+      groupId?: number;
+      round?: string;
+      scoreA?: string;
+      scoreB?: string;
+      winner?: number;
+      courtId?: number;
+      scheduledTime?: string;
+      completed: boolean;
+      teamA: {
+        id: number;
+        name: string;
+        player1: string;
+        player2?: string;
+        categoryId: number;
+      };
+      teamB: {
+        id: number;
+        name: string;
+        player1: string;
+        player2?: string;
+        categoryId: number;
+      };
+    }>;
+  }>;
+  stats: {
+    totalTeams: number;
+    totalMatches: number;
+    completedMatches: number;
+  };
+}
 
 export default function TournamentDetail() {
   const { id } = useParams();
@@ -25,7 +119,7 @@ export default function TournamentDetail() {
     data: tournament,
     isLoading,
     error,
-  } = useQuery({
+  } = useQuery<TournamentDetail>({
     queryKey: [`/api/tournaments/${id}/details`],
     enabled: !!id,
   });
@@ -459,9 +553,14 @@ export default function TournamentDetail() {
                       </div>
                     </div>
                     <div className="flex justify-end space-x-2">
-                      <Button variant="outline" size="sm">
-                        Add Courts
-                      </Button>
+                      <CourtForm 
+                        venueId={venue.id} 
+                        tournamentId={Number(id)}
+                      >
+                        <Button variant="outline" size="sm">
+                          Add Courts
+                        </Button>
+                      </CourtForm>
                       <Button variant="outline" size="sm">
                         Edit
                       </Button>

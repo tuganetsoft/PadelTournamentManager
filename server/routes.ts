@@ -45,6 +45,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     res.json(tournament);
   });
+  
+  // Get tournament full details
+  app.get("/api/tournaments/:id/details", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).send("Invalid ID");
+    
+    try {
+      // Get base tournament data
+      const tournament = await storage.getTournament(id);
+      if (!tournament) return res.status(404).send("Tournament not found");
+      
+      // Get venues with courts
+      const venues = await storage.getVenuesByTournamentId(id);
+      const venuesWithCourts = await Promise.all(
+        venues.map(async (venue) => {
+          const courts = await storage.getCourtsByVenueId(venue.id);
+          return { ...venue, courts };
+        })
+      );
+      
+      // Get categories with teams
+      const categories = await storage.getCategoriesByTournamentId(id);
+      const categoriesWithData = await Promise.all(
+        categories.map(async (category) => {
+          const teams = await storage.getTeamsByCategoryId(category.id);
+          const groups = await storage.getGroupsByCategoryId(category.id);
+          
+          // Get group assignments
+          const groupsWithAssignments = await Promise.all(
+            groups.map(async (group) => {
+              const assignments = await storage.getGroupAssignmentsByGroupId(group.id);
+              
+              // Add team data to assignments
+              const assignmentsWithTeams = await Promise.all(
+                assignments.map(async (assignment) => {
+                  const team = await storage.getTeam(assignment.teamId);
+                  return { ...assignment, team };
+                })
+              );
+              
+              return { ...group, assignments: assignmentsWithTeams };
+            })
+          );
+          
+          // Get matches
+          const matches = await storage.getMatchesByCategoryId(category.id);
+          const matchesWithTeams = await Promise.all(
+            matches.map(async (match) => {
+              const teamA = await storage.getTeam(match.teamAId);
+              const teamB = await storage.getTeam(match.teamBId);
+              
+              return { ...match, teamA, teamB };
+            })
+          );
+          
+          return { 
+            ...category, 
+            teams, 
+            groups: groupsWithAssignments,
+            matches: matchesWithTeams 
+          };
+        })
+      );
+      
+      // Calculate statistics
+      const totalTeams = categoriesWithData.reduce(
+        (sum, category) => sum + (category.teams?.length || 0), 
+        0
+      );
+      
+      const allMatches = categoriesWithData.flatMap(
+        category => category.matches || []
+      );
+      
+      const totalMatches = allMatches.length;
+      const completedMatches = allMatches.filter(m => m.completed).length;
+      
+      // Combine all data
+      const tournamentDetails = {
+        ...tournament,
+        venues: venuesWithCourts,
+        categories: categoriesWithData,
+        stats: {
+          totalTeams,
+          totalMatches,
+          completedMatches
+        }
+      };
+      
+      res.json(tournamentDetails);
+    } catch (error) {
+      console.error("Error fetching tournament details:", error);
+      res.status(500).json({ error: "Failed to load tournament details" });
+    }
+  });
 
   // Create tournament
   app.post("/api/tournaments", async (req, res) => {
