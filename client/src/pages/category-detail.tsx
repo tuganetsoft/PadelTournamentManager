@@ -638,7 +638,8 @@ export default function CategoryDetail() {
                                       />
                                     </FormControl>
                                     <FormDescription>
-                                      Add an asterisk (*) at the beginning of a team name to mark it as seeded
+                                      Add an asterisk (*) at the beginning of a team name to mark it as seeded.
+                                      Seeded teams will be evenly distributed across groups during auto-assignment.
                                     </FormDescription>
                                     <FormMessage />
                                   </FormItem>
@@ -722,6 +723,15 @@ export default function CategoryDetail() {
                       <CardDescription>
                         Manage groups and team assignments
                       </CardDescription>
+                      <div className="flex items-start gap-2 p-3 border rounded-md bg-amber-50 text-amber-800 mt-4 text-sm">
+                        <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium">About Seeded Teams</p>
+                          <p className="mt-1">Seeded teams are marked with a badge and will be distributed evenly across 
+                          groups during auto-assignment. This ensures balanced competition by preventing the 
+                          strongest teams from being placed in the same group.</p>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       {category.groups.length === 0 ? (
