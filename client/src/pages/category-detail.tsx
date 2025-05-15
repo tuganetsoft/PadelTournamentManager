@@ -91,6 +91,7 @@ interface CategoryDetail {
     player1: string;
     player2?: string;
     categoryId: number;
+    seeded?: boolean;
   }>;
   groups: Array<{
     id: number;
@@ -110,6 +111,7 @@ interface CategoryDetail {
         player1: string;
         player2?: string;
         categoryId: number;
+        seeded?: boolean;
       };
     }>;
   }>;
@@ -182,7 +184,14 @@ function SortableTeamItem({ team, groupId }: { team: any, groupId?: number }) {
     >
       <div className="flex justify-between items-center">
         <div>
-          <div className="font-medium">{team.name}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{team.name}</span>
+            {team.seeded && (
+              <div className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded-full">
+                Seeded
+              </div>
+            )}
+          </div>
           {team.player1 && <div className="text-sm text-muted-foreground">{team.player1}</div>}
           {team.player2 && <div className="text-sm text-muted-foreground">{team.player2}</div>}
         </div>
@@ -678,7 +687,14 @@ export default function CategoryDetail() {
                             className="border border-border rounded-md p-4 bg-card"
                           >
                             <div className="flex justify-between items-center">
-                              <h3 className="font-medium">{team.name}</h3>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-medium">{team.name}</h3>
+                                {team.seeded && (
+                                  <div className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded-full">
+                                    Seeded
+                                  </div>
+                                )}
+                              </div>
                               <Button variant="ghost" size="icon" className="h-8 w-8">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
