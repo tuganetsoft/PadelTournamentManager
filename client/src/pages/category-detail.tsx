@@ -34,8 +34,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, ArrowLeft, PlusCircle, Trash2, Users, UserPlus, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, Edit2, PlusCircle, Trash2, Users, UserPlus, Loader2 } from "lucide-react";
 import { TeamForm } from "@/components/team-form";
+import { TeamEditForm } from "@/components/team-edit-form";
 import { EliminationBracket } from "@/components/elimination-bracket";
 import { TournamentStandings } from "@/components/tournament-standings";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -260,6 +261,32 @@ export default function CategoryDetail() {
     onError: (error: Error) => {
       toast({
         title: "Error updating team",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Add delete team mutation
+  const deleteTeamMutation = useMutation({
+    mutationFn: async (teamId: number) => {
+      const res = await apiRequest("DELETE", `/api/teams/${teamId}`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to delete team");
+      }
+      return { success: true };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Team deleted",
+        description: "The team has been deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error deleting team",
         description: error.message,
         variant: "destructive",
       });
@@ -1107,9 +1134,30 @@ export default function CategoryDetail() {
                                   </div>
                                 )}
                               </div>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center space-x-1">
+                                <TeamEditForm 
+                                  team={team}
+                                  tournamentId={Number(tournamentId)}
+                                  onSuccess={() => queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] })}
+                                >
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                </TeamEditForm>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8"
+                                  onClick={() => deleteTeamMutation.mutate(team.id)}
+                                  disabled={deleteTeamMutation.isPending}
+                                >
+                                  {deleteTeamMutation.isPending && deleteTeamMutation.variables === team.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </div>
                             </div>
                             <div className="mt-2 text-sm text-muted-foreground">
                               {team.player1 && <div>Player 1: {team.player1}</div>}
