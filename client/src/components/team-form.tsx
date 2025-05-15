@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,7 @@ import { Loader2 } from "lucide-react";
 
 const teamSchema = insertTeamSchema.extend({
   categoryId: z.number(),
+  seeded: z.boolean().default(false),
 });
 
 type TeamFormValues = z.infer<typeof teamSchema>;

@@ -55,8 +55,9 @@ export const teams = pgTable("teams", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   player1: text("player1").notNull(),
-  player2: text("player2").notNull(),
+  player2: text("player2"),
   categoryId: integer("category_id").notNull(),
+  seeded: boolean("seeded").default(false),
 });
 
 // Group model
@@ -136,6 +137,7 @@ export const insertTeamSchema = createInsertSchema(teams).pick({
   player1: true,
   player2: true,
   categoryId: true,
+  seeded: true,
 });
 
 export const insertGroupSchema = createInsertSchema(groups).pick({
