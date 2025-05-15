@@ -358,6 +358,7 @@ function GroupTeamCard({
 export default function CategoryDetail() {
   const { id, tournamentId } = useParams();
   const [, navigate] = useLocation();
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("teams");
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -422,6 +423,33 @@ export default function CategoryDetail() {
     onError: (error: Error) => {
       toast({
         title: "Error deleting team",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Save team assignments mutation
+  const saveTeamAssignmentsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/categories/${id}/save-assignments`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to save team assignments");
+      }
+      return { success: true };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Team assignments saved",
+        description: "All team assignments have been saved successfully",
+      });
+      setHasUnsavedChanges(false);
+      queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error saving assignments",
         description: error.message,
         variant: "destructive",
       });
