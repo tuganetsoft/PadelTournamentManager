@@ -1442,161 +1442,149 @@ export default function CategoryDetail() {
                           </Button>
                         </div>
                       ) : (
-                        <DndContext
-                          sensors={sensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={handleDragEnd}
-                        >
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                              <h3 className="font-medium mb-4">Unassigned Teams</h3>
-                              <div 
-                                id="unassigned-teams"
-                                className="border border-border rounded-md p-4 bg-muted min-h-[300px]"
-                              >
-                                <div className="space-y-4">
+                        <div className="space-y-6">
+                          {/* Teams Assignment section */}
+                          <div className="bg-muted p-4 rounded-md">
+                            <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
+                              <div>
+                                <h3 className="text-lg font-medium">Teams Assignment</h3>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {unassignedTeams.length} teams unassigned
+                                </p>
+                              </div>
+                              <div>
+                                <Button 
+                                  variant="default" 
+                                  onClick={() => autoAssignTeamsMutation.mutate()}
+                                  disabled={autoAssignTeamsMutation.isPending || unassignedTeams.length === 0}
+                                >
+                                  {autoAssignTeamsMutation.isPending ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Assigning Teams...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Users className="mr-2 h-4 w-4" />
+                                      Auto-Assign Teams
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {unassignedTeams.length > 0 && (
+                              <div className="mt-4 border border-border rounded-md p-4 bg-card">
+                                <h4 className="font-medium mb-2">Unassigned Teams</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                   {unassignedTeams.map(team => (
-                                    <TeamCard 
-                                      key={team.id} 
-                                      team={team}
-                                      showAssignControls={groupsWithTeams.length > 0}
-                                      groups={groupsWithTeams}
-                                      onEdit={() => {
-                                        // Open edit dialog
-                                        const currentTeam = team;
-                                        const dialog = document.createElement('dialog');
-                                        dialog.open = true;
-                                        document.body.appendChild(dialog);
-                                        
-                                        // Close when editing is done
-                                        dialog.addEventListener('close', () => {
-                                          document.body.removeChild(dialog);
-                                          // Refresh data
-                                          queryClient.invalidateQueries({
-                                            queryKey: [`/api/categories/${id}/details`],
-                                          });
-                                        });
-                                      }}
-                                      onDelete={() => {
-                                        if (confirm(`Are you sure you want to delete team ${team.name}?`)) {
-                                          deleteTeamMutation.mutate(team.id);
-                                        }
-                                      }}
-                                      onAssign={(groupId) => {
-                                        assignTeamToGroup(team.id, groupId);
-                                        // Explicitly set unsaved changes flag
-                                        setHasUnsavedChanges(true);
-                                        console.log("Team assigned, setting hasUnsavedChanges to true");
-                                      }}
-                                    />
+                                    <div key={team.id} className="border border-border rounded-md p-3 bg-white">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium">{team.name}</span>
+                                          {team.seeded && (
+                                            <div className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded-full">
+                                              Seeded
+                                            </div>
+                                          )}
+                                        </div>
+                                        <TeamEditForm 
+                                          team={team}
+                                          tournamentId={Number(tournamentId)}
+                                          onSuccess={() => queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] })}
+                                        >
+                                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                                            <Edit className="h-4 w-4" />
+                                          </Button>
+                                        </TeamEditForm>
+                                      </div>
+                                      {(team.player1 || team.player2) && (
+                                        <div className="mt-2 text-sm text-muted-foreground">
+                                          {team.player1 && <div>Player 1: {team.player1}</div>}
+                                          {team.player2 && <div>Player 2: {team.player2}</div>}
+                                        </div>
+                                      )}
+                                    </div>
                                   ))}
                                 </div>
-                                
-                                {unassignedTeams.length === 0 && (
-                                  <div className="text-center py-8 text-muted-foreground">
-                                    All teams assigned
-                                  </div>
-                                )}
                               </div>
-                            </div>
-
-                            {groupsWithTeams.map(group => (
-                              <div key={group.id}>
-                                <h3 className="font-medium mb-4">{group.name}</h3>
-                                <div 
-                                  className="border border-border rounded-md p-4 bg-muted min-h-[300px]"
-                                  id={`group-${group.id}`}
-                                >
-                                  <div className="space-y-4">
-                                    {group.assignments.map((assignment) => (
-                                      <GroupTeamCard 
-                                        key={assignment.team.id} 
-                                        team={assignment.team}
-                                        otherGroups={groupsWithTeams.filter(g => g.id !== group.id)}
-                                        onEdit={() => {
-                                          // Show edit dialog
-                                          // This is a simplified implementation that would need improvement
-                                          alert(`Edit ${assignment.team.name}`);
-                                          
-                                          // Refresh after edit
-                                          queryClient.invalidateQueries({
-                                            queryKey: [`/api/categories/${id}/details`],
-                                          });
-                                        }}
-                                        onMove={(targetGroupId) => {
-                                          moveTeamBetweenGroups(
-                                            assignment.team.id, 
-                                            group.id, 
-                                            targetGroupId, 
-                                            assignment.id
-                                          );
-                                          // Explicitly set unsaved changes flag
-                                          setHasUnsavedChanges(true);
-                                          console.log("Team moved, setting hasUnsavedChanges to true");
-                                        }}
-                                        onRemove={() => {
-                                          removeTeamFromGroup(
-                                            assignment.team.id, 
-                                            group.id, 
-                                            assignment.id
-                                          );
-                                          // Explicitly set unsaved changes flag
-                                          setHasUnsavedChanges(true);
-                                          console.log("Team removed, setting hasUnsavedChanges to true");
-                                        }}
-                                      />
-                                    ))}
+                            )}
+                          </div>
+                          
+                          {/* Group listing */}
+                          {groupsWithTeams.length > 0 && (
+                            <div className="space-y-6">
+                              <h3 className="text-lg font-medium">Groups</h3>
+                              {groupsWithTeams.map(group => (
+                                <div key={group.id} className="border border-border p-4 rounded-md">
+                                  <h4 className="font-medium text-lg mb-4">Group {group.name}</h4>
+                                  <div className="space-y-3">
+                                    {group.assignments.length === 0 ? (
+                                      <div className="text-center py-4 text-muted-foreground">
+                                        No teams assigned to this group
+                                      </div>
+                                    ) : (
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {group.assignments.map(assignment => (
+                                          <div key={assignment.team.id} className="border border-border rounded-md p-3 bg-card">
+                                            <div className="flex justify-between items-center">
+                                              <div className="flex items-center gap-2">
+                                                <span className="font-medium">{assignment.team.name}</span>
+                                                {assignment.team.seeded && (
+                                                  <div className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded-full">
+                                                    Seeded
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <TeamEditForm 
+                                                team={assignment.team}
+                                                tournamentId={Number(tournamentId)}
+                                                onSuccess={() => queryClient.invalidateQueries({ queryKey: [`/api/categories/${id}/details`] })}
+                                              >
+                                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                  <Edit className="h-4 w-4" />
+                                                </Button>
+                                              </TeamEditForm>
+                                            </div>
+                                            <div className="mt-2 text-sm text-muted-foreground">
+                                              {assignment.team.player1 && <div>Player 1: {assignment.team.player1}</div>}
+                                              {assignment.team.player2 && <div>Player 2: {assignment.team.player2}</div>}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
-                                  
-                                  {group.assignments.length === 0 && (
-                                    <div className="text-center py-8 text-muted-foreground">
-                                      Use assignment controls to add teams
-                                    </div>
-                                  )}
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                          
-                          {/* Debug output */}
-                          <div className="text-xs text-muted-foreground mb-4 flex items-center gap-2">
-                            <span>hasUnsavedChanges: {hasUnsavedChanges ? "true" : "false"}</span>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => {
-                                console.log("Setting hasUnsavedChanges to true");
-                                setHasUnsavedChanges(true);
-                              }}
-                            >
-                              Toggle Flag
-                            </Button>
-                          </div>
-                          
-                          {/* Save confirmation button */}
-                          {hasUnsavedChanges && (
-                            <div className="flex justify-center mt-8">
-                              <Button 
-                                className="w-full max-w-md"
-                                onClick={() => saveTeamAssignmentsMutation.mutate()}
-                                disabled={saveTeamAssignmentsMutation.isPending}
-                                size="lg"
-                              >
-                                {saveTeamAssignmentsMutation.isPending ? (
-                                  <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Saving Team Assignments...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Save className="mr-2 h-4 w-4" />
-                                    Save Team Assignments
-                                  </>
-                                )}
-                              </Button>
+                              ))}
                             </div>
                           )}
-                        </DndContext>
+                          
+                          {/* Action buttons */}
+                          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-between">
+                            <div className="flex-1">
+                              <Button 
+                                variant="outline" 
+                                className="w-full"
+                                onClick={() => setCreateGroupsOpen(true)}
+                              >
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Manage Groups
+                              </Button>
+                            </div>
+                            
+                            <div className="flex-1">
+                              <Button 
+                                variant="outline" 
+                                className="w-full"
+                                onClick={() => setGenerateMatchesOpen(true)}
+                              >
+                                <GitBranch className="mr-2 h-4 w-4" />
+                                Generate Matches
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
                       )}
                     </CardContent>
                   </Card>
