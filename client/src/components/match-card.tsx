@@ -9,10 +9,11 @@ type MatchCardProps = {
     teamBId: number;
     round?: string;
     groupId?: number;
-    category: {
+    category?: {
       name: string;
       id: number;
     };
+    categoryName?: string; // Added for flattened structure from schedule
     completed?: boolean;
     winner?: number | null;
   };
@@ -21,7 +22,8 @@ type MatchCardProps = {
 export function MatchCard({ match }: MatchCardProps) {
   // Determine category color for styling
   const getCategoryColor = () => {
-    const categoryName = match.category.name.toLowerCase();
+    // Get category name from either the category object or the categoryName property
+    const categoryName = (match.category?.name || match.categoryName || '').toLowerCase();
     if (categoryName.includes('men')) {
       return 'bg-blue-100 border-blue-300';
     } else if (categoryName.includes('women')) {
@@ -46,7 +48,7 @@ export function MatchCard({ match }: MatchCardProps) {
   return (
     <div className={`h-full w-full flex items-center justify-center ${getCategoryColor()} border rounded-md p-1`}>
       <div className="text-[9px] text-center space-y-0 w-full leading-tight">
-        <div className="font-medium text-neutral-dark text-[10px]">{match.category.name}</div>
+        <div className="font-medium text-neutral-dark text-[10px]">{match.category?.name || match.categoryName || 'Match'}</div>
         <div className="truncate max-w-full" title={match.teamA?.name || `Team ${match.teamAId}`}>
           {match.teamA?.name || `T${match.teamAId}`}
         </div>
