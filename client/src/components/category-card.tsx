@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { useLocation } from "wouter";
 
 type CategoryCardProps = {
   category: {
@@ -8,11 +9,16 @@ type CategoryCardProps = {
     status: string;
     teams: any[];
     matches: any[];
+    tournamentId?: number;
   };
   onClick?: () => void;
+  tournamentId?: number;
 };
 
-export function CategoryCard({ category, onClick }: CategoryCardProps) {
+export function CategoryCard({ category, onClick, tournamentId }: CategoryCardProps) {
+  const effectiveTournamentId = category.tournamentId || tournamentId;
+  const [_, setLocation] = useLocation();
+  
   const formatLabel = {
     "GROUPS": "Groups",
     "SINGLE_ELIMINATION": "Single Elimination",
@@ -34,7 +40,15 @@ export function CategoryCard({ category, onClick }: CategoryCardProps) {
   return (
     <div 
       className="border border-neutral-light rounded-lg p-4 hover:border-primary/20 hover:bg-primary/5 transition-colors cursor-pointer"
-      onClick={onClick}
+      onClick={(e) => {
+        if (onClick) {
+          onClick();
+        } else if (effectiveTournamentId) {
+          setLocation(`/tournaments/${effectiveTournamentId}/categories/${category.id}`);
+        } else {
+          setLocation(`/categories/${category.id}`);
+        }
+      }}
     >
       <div className="flex justify-between items-start">
         <div>
