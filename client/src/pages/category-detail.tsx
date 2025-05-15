@@ -292,7 +292,7 @@ export default function CategoryDetail() {
   const generateMatchesForm = useForm({
     resolver: zodResolver(generateMatchesSchema),
     defaultValues: {
-      matchType: "GROUP_STAGE" as const,
+      matchType: "ROUND_ROBIN" as const,
       autoAssignCourts: false,
     },
   });
