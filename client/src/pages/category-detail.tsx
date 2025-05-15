@@ -438,8 +438,8 @@ export default function CategoryDetail() {
       const currentAssignments: { teamId: number; groupId: number }[] = [];
       
       // If we have category data with groups, collect all current assignments
-      if (data?.groups) {
-        data.groups.forEach(group => {
+      if (category?.groups) {
+        category.groups.forEach(group => {
           group.assignments.forEach(assignment => {
             currentAssignments.push({
               teamId: assignment.teamId,
