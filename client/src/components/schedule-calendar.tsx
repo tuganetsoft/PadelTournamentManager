@@ -137,22 +137,34 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
     
     if (!courtId || !timeSlot) return;
     
-    // Create a date object combining the selected date and time slot
-    const [hours, minutes] = timeSlot.split(':').map(Number);
-    const scheduledDate = new Date(selectedDate);
-    scheduledDate.setHours(hours, minutes, 0, 0);
-    
-    // If dropping in the "unscheduled" area, we're removing the schedule
-    if (courtId === -1) {
-      scheduleMatchMutation.mutate({
-        matchId: draggedMatch.id,
-        data: { courtId: null, scheduledTime: null }
-      });
-    } else {
-      // Schedule the match
-      scheduleMatchMutation.mutate({
-        matchId: draggedMatch.id,
-        data: { courtId, scheduledTime: scheduledDate.toISOString() }
+    try {
+      // If dropping in the "unscheduled" area, we're removing the schedule
+      if (courtId === -1) {
+        scheduleMatchMutation.mutate({
+          matchId: draggedMatch.id,
+          data: { courtId: null, scheduledTime: null }
+        });
+      } else {
+        // Create a date object combining the selected date and time slot
+        const [hours, minutes] = timeSlot.split(':').map(Number);
+        // Make sure we're working with a clean Date object
+        const scheduledDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hours, minutes, 0, 0);
+        
+        // Format as ISO string for the server
+        const formattedDate = scheduledDate.toISOString();
+        
+        // Schedule the match
+        scheduleMatchMutation.mutate({
+          matchId: draggedMatch.id,
+          data: { courtId, scheduledTime: formattedDate }
+        });
+      }
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      toast({
+        title: "Error scheduling match",
+        description: "There was a problem with the date formatting. Please try again.",
+        variant: "destructive"
       });
     }
     
