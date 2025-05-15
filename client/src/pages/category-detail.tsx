@@ -510,8 +510,8 @@ export default function CategoryDetail() {
         // Here we're just doing a simple display estimation for immediate feedback
         
         // Create "loading" matches to show in the UI until the real data loads
-        let placeholderMatches = [];
-        const matchType = generateMatchesForm.getValues().matchType || "ROUND_ROBIN";
+        let placeholderMatches: any[] = [];
+        const matchType = generateMatchesForm.getValues().matchType as "ROUND_ROBIN" | "SINGLE_ELIMINATION" || "ROUND_ROBIN";
         
         if (matchType === "ROUND_ROBIN" && category.groups.length > 0) {
           // For round robin, create placeholder matches between teams in each group
@@ -1271,10 +1271,10 @@ export default function CategoryDetail() {
                                   id={`group-${group.id}`}
                                 >
                                   <SortableContext 
-                                    items={group.assignments.map(a => a.team.id.toString())}
+                                    items={group.assignments.map((a: {team: Team}) => a.team.id.toString())}
                                     strategy={verticalListSortingStrategy}
                                   >
-                                    {group.assignments.map(assignment => (
+                                    {group.assignments.map((assignment: {team: Team}) => (
                                       <SortableTeamItem 
                                         key={assignment.team.id} 
                                         team={assignment.team} 
@@ -1466,8 +1466,8 @@ export default function CategoryDetail() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="GROUP_STAGE">Group Stage</SelectItem>
-                        <SelectItem value="KNOCKOUT">Knockout / Elimination</SelectItem>
+                        <SelectItem value="ROUND_ROBIN">Group Stage</SelectItem>
+                        <SelectItem value="SINGLE_ELIMINATION">Knockout / Elimination</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
