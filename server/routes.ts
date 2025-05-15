@@ -416,7 +416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if user owns the tournament
       const tournament = await storage.getTournament(category.tournamentId);
-      if (tournament.userId !== req.user.id) {
+      if (tournament?.userId !== req.user.id) {
         return res.status(403).send("Not authorized to manage this category");
       }
       
@@ -424,47 +424,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const teams = await storage.getTeamsByCategoryId(id);
       const groups = await storage.getGroupsByCategoryId(id);
       
-      // Verify that the assignments are valid by checking if each team in the category
-      // is either in a group or unassigned (but not in multiple groups)
+      // Get current team assignments
+      // This is the data we want to persist
+      const currentAssignments: { 
+        teamId: number; 
+        groupId: number;
+        assignmentId?: number; // Existing assignment ID if any
+      }[] = [];
       
       // Get all assignments across all groups
-      let allAssignments: { id: number; groupId: number; teamId: number }[] = [];
       for (const group of groups) {
         const groupAssignments = await storage.getGroupAssignmentsByGroupId(group.id);
-        allAssignments = [...allAssignments, ...groupAssignments];
-      }
-      
-      // Check for duplicates (team assigned to multiple groups) 
-      const teamCounts: { [key: number]: number } = {};
-      for (const assignment of allAssignments) {
-        if (!teamCounts[assignment.teamId]) {
-          teamCounts[assignment.teamId] = 1;
-        } else {
-          teamCounts[assignment.teamId]++;
+        for (const assignment of groupAssignments) {
+          currentAssignments.push({
+            teamId: assignment.teamId,
+            groupId: group.id,
+            assignmentId: assignment.id
+          });
         }
       }
       
-      // If we find duplicates, clean them up by keeping only the latest assignment for each team
-      for (const teamIdString in teamCounts) {
-        const teamId = parseInt(teamIdString);
-        if (teamCounts[teamId] > 1) {
-          // Find all assignments for this team
-          const teamAssignments = allAssignments.filter(a => a.teamId === teamId);
-          
-          // Sort by assignment ID (descending) to get the most recent one
-          teamAssignments.sort((a, b) => b.id - a.id);
-          
-          // Keep the first one (most recent) and delete the rest
-          for (let i = 1; i < teamAssignments.length; i++) {
-            await storage.deleteGroupAssignment(teamAssignments[i].id);
+      console.log(`Found ${currentAssignments.length} current team assignments to persist`);
+      
+      // For each team, ensure it's only in one group (or none)
+      const teamIdToGroup = new Map<number, number>();
+      const changesCount = { updated: 0, deleted: 0, created: 0 };
+      
+      for (const team of teams) {
+        const teamAssignments = currentAssignments.filter(a => a.teamId === team.id);
+        
+        if (teamAssignments.length === 0) {
+          // Team is not assigned to any group, which is valid
+          continue;
+        }
+        
+        if (teamAssignments.length === 1) {
+          // Team is correctly assigned to only one group
+          teamIdToGroup.set(team.id, teamAssignments[0].groupId);
+          continue;
+        }
+        
+        // If we have multiple assignments, keep only the most recent one
+        // and delete the others
+        console.log(`Team ${team.id} has ${teamAssignments.length} assignments. Cleaning up...`);
+        
+        // Find the most recent assignment (assuming higher ID = more recent)
+        const mostRecentAssignment = teamAssignments.reduce((prev, current) => 
+          (prev.assignmentId || 0) > (current.assignmentId || 0) ? prev : current
+        );
+        
+        // Keep this assignment
+        teamIdToGroup.set(team.id, mostRecentAssignment.groupId);
+        
+        // Delete all other assignments
+        for (const assignment of teamAssignments) {
+          if (assignment.assignmentId !== mostRecentAssignment.assignmentId) {
+            if (assignment.assignmentId) {
+              console.log(`Deleting duplicate assignment ${assignment.assignmentId} for team ${team.id}`);
+              await storage.deleteGroupAssignment(assignment.assignmentId);
+              changesCount.deleted++;
+            }
           }
         }
       }
       
-      // Log success 
-      console.log("Team assignments verification completed and saved successfully");
+      // Now reconcile the assignments with what's already in the database
+      for (const team of teams) {
+        const desiredGroupId = teamIdToGroup.get(team.id);
+        const existingAssignments = currentAssignments.filter(a => a.teamId === team.id);
+        
+        if (!desiredGroupId && existingAssignments.length > 0) {
+          // Team should not be in any group, but has assignments - delete them
+          for (const assignment of existingAssignments) {
+            if (assignment.assignmentId) {
+              console.log(`Deleting assignment ${assignment.assignmentId} for team ${team.id}`);
+              await storage.deleteGroupAssignment(assignment.assignmentId);
+              changesCount.deleted++;
+            }
+          }
+        } else if (desiredGroupId) {
+          // Team should be in a specific group
+          if (existingAssignments.length === 0) {
+            // Team is not in any group but should be - create the assignment
+            console.log(`Creating new assignment for team ${team.id} in group ${desiredGroupId}`);
+            await storage.createGroupAssignment({
+              teamId: team.id,
+              groupId: desiredGroupId,
+              played: 0,
+              won: 0,
+              lost: 0,
+              points: 0
+            });
+            changesCount.created++;
+          } else if (existingAssignments[0].groupId !== desiredGroupId) {
+            // Team is in wrong group - update the assignment
+            console.log(`Updating assignment for team ${team.id} from group ${existingAssignments[0].groupId} to ${desiredGroupId}`);
+            if (existingAssignments[0].assignmentId) {
+              await storage.updateGroupAssignment(existingAssignments[0].assignmentId, {
+                groupId: desiredGroupId
+              });
+              changesCount.updated++;
+            }
+          }
+        }
+      }
       
-      return res.status(200).json({ success: true, message: "Team assignments saved" });
+      // Log success
+      console.log("Team assignments saved successfully:", changesCount);
+      
+      if (changesCount.created === 0 && changesCount.updated === 0 && changesCount.deleted === 0) {
+        return res.status(200).json({ success: true, message: "No changes to save" });
+      }
+      
+      return res.status(200).json({ 
+        success: true, 
+        message: `Team assignments saved (${changesCount.created} created, ${changesCount.updated} updated, ${changesCount.deleted} deleted)` 
+      });
     } catch (error) {
       console.error("Error saving team assignments:", error);
       res.status(500).json({ error: "Failed to save team assignments" });
