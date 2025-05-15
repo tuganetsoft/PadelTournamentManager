@@ -433,7 +433,31 @@ export default function CategoryDetail() {
   const saveTeamAssignmentsMutation = useMutation({
     mutationFn: async () => {
       console.log("Saving team assignments...");
-      const res = await apiRequest("POST", `/api/categories/${id}/save-assignments`);
+      
+      // Collect current assignments from all groups
+      const currentAssignments: { teamId: number; groupId: number }[] = [];
+      
+      // If we have category data with groups, collect all current assignments
+      if (data?.groups) {
+        data.groups.forEach(group => {
+          group.assignments.forEach(assignment => {
+            currentAssignments.push({
+              teamId: assignment.teamId,
+              groupId: group.id
+            });
+          });
+        });
+      }
+      
+      console.log("Current assignments to save:", currentAssignments);
+      
+      // Send the current assignments to the server
+      const res = await apiRequest(
+        "POST", 
+        `/api/categories/${id}/save-assignments`,
+        { assignments: currentAssignments }
+      );
+      
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.error || "Failed to save team assignments");
