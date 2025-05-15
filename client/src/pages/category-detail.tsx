@@ -56,6 +56,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   DndContext, 
   closestCenter,
   KeyboardSensor,
@@ -574,8 +579,13 @@ export default function CategoryDetail() {
                           Auto-Assign Teams
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p>Evenly distributes teams across groups. Seeded teams are assigned first to ensure balanced competition.</p>
+                      <TooltipContent className="max-w-xs p-3">
+                        <p className="font-medium mb-1">Smart Distribution Algorithm</p>
+                        <ol className="list-decimal pl-4 space-y-1 text-sm">
+                          <li>Seeded teams are distributed first, one per group</li>
+                          <li>Non-seeded teams are distributed evenly afterward</li>
+                          <li>Teams are randomly shuffled within each priority group</li>
+                        </ol>
                       </TooltipContent>
                     </Tooltip>
                   </>
@@ -644,9 +654,21 @@ export default function CategoryDetail() {
                                         rows={10}
                                       />
                                     </FormControl>
-                                    <FormDescription>
-                                      Add an asterisk (*) at the beginning of a team name to mark it as seeded.
-                                      Seeded teams will be evenly distributed across groups during auto-assignment.
+                                    <FormDescription className="space-y-2">
+                                      <p>
+                                        Add an asterisk (*) at the beginning of a team name to mark it as seeded.
+                                        Seeded teams will be evenly distributed across groups during auto-assignment.
+                                      </p>
+                                      <div className="flex items-start gap-2 p-2 border rounded-md bg-muted text-xs">
+                                        <div>
+                                          <span className="font-medium">Examples:</span>
+                                          <ul className="list-disc pl-4 mt-1">
+                                            <li>Team Alpha</li>
+                                            <li>*Team Bravo (seeded)</li>
+                                            <li>Team Charlie</li>
+                                          </ul>
+                                        </div>
+                                      </div>
                                     </FormDescription>
                                     <FormMessage />
                                   </FormItem>
