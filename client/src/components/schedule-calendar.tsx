@@ -186,8 +186,16 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
       const res = await apiRequest('PATCH', `/api/matches/${matchId}`, data);
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournament.id}/details`] });
+    onSuccess: async () => {
+      // Invalidate multiple queries to ensure all views are updated
+      await queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournament.id}/details`] });
+      
+      // Also invalidate any tournament matches queries 
+      await queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournament.id}/matches`] });
+      
+      // Force refetch to update the UI immediately without requiring page refresh
+      await queryClient.refetchQueries({ queryKey: [`/api/tournaments/${tournament.id}/details`] });
+      
       toast({
         title: "Match scheduled",
         description: "The match has been successfully scheduled.",
