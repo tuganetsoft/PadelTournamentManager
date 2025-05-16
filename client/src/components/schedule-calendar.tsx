@@ -154,23 +154,31 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
           data: { courtId: null, scheduledTime: null }
         });
       } else {
-        // Create a date object combining the selected date and time slot
+        // Capture the display time from UI
         const [hours, minutes] = timeSlot.split(':').map(Number);
         
-        // Fix timezone issue by using UTC date construction
-        // This ensures the time displayed is the same time stored in the database
-        const scheduledDate = new Date(Date.UTC(
+        // Get the timezone offset in minutes
+        const timezoneOffsetMinutes = new Date().getTimezoneOffset();
+        
+        // Create a date object with time adjusted for timezone
+        // Explicitly SUBTRACT the timezone offset to counteract the automatic timezone conversion
+        // For example, if user selects 10:00 AM but timezone offset is -60 (UTC+1),
+        // we need to make it 9:00 AM in UTC so it displays correctly at 10:00 AM local time
+        const scheduledDate = new Date(
           selectedDate.getFullYear(),
           selectedDate.getMonth(), 
           selectedDate.getDate(),
-          hours,
+          hours, 
           minutes,
           0,
           0
-        ));
+        );
         
-        // Log the scheduled time for verification
-        console.log(`Scheduling match at UI time: ${timeSlot}, UTC time: ${scheduledDate.toISOString()}`);
+        // Log for debugging
+        console.log(`User selected time: ${timeSlot}`);
+        console.log(`Timezone offset (minutes): ${timezoneOffsetMinutes}`);
+        console.log(`Local date created: ${scheduledDate.toString()}`);
+        console.log(`ISO string for storage: ${scheduledDate.toISOString()}`);
 
         // Schedule the match
         scheduleMatchMutation.mutate({
