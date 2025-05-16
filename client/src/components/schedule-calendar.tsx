@@ -1,3 +1,7 @@
+The code modification focuses on fixing the date handling within the handleDrop function in the schedule-calendar.tsx component to resolve the "value.toISOString is not a function" error.
+```
+
+```replit_final_file
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,7 +46,7 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
       categoryName: category.name // Add category name for display
     }))
   ) || [];
-  
+
   // Get all matches scheduled for the selected date
   const scheduledMatches = allMatches.filter((match: any) => {
     if (!match.scheduledTime) return false;
@@ -82,21 +86,21 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
     setDraggedMatch(match);
     setIsDragging(true);
     e.dataTransfer.setData('text/plain', JSON.stringify({ matchId: match.id }));
-    
+
     // Add a ghost image for dragging
     const element = e.currentTarget as HTMLDivElement;
     const rect = element.getBoundingClientRect();
     const ghostElement = element.cloneNode(true) as HTMLDivElement;
-    
+
     // Set some styles for the ghost
     ghostElement.style.position = 'absolute';
     ghostElement.style.top = '-1000px';
     ghostElement.style.opacity = '0.8';
     ghostElement.style.width = `${rect.width}px`;
-    
+
     document.body.appendChild(ghostElement);
     e.dataTransfer.setDragImage(ghostElement, 0, 0);
-    
+
     // Clean up ghost element after dragging
     setTimeout(() => {
       document.body.removeChild(ghostElement);
@@ -109,7 +113,7 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
     const element = e.currentTarget as HTMLDivElement;
     const courtId = element.dataset.courtId;
     const timeSlot = element.dataset.timeSlot;
-    
+
     if (courtId && timeSlot) {
       setHoveredCell(`${courtId}-${timeSlot}`);
       element.classList.add('bg-blue-100');
@@ -128,15 +132,15 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
     e.preventDefault();
     const element = e.currentTarget as HTMLDivElement;
     element.classList.remove('bg-blue-100');
-    
+
     // If no match is being dragged, or no court/time data, exit
     if (!draggedMatch) return;
-    
+
     const courtId = parseInt(element.dataset.courtId || '0');
     const timeSlot = element.dataset.timeSlot || '';
-    
+
     if (!courtId || !timeSlot) return;
-    
+
     try {
       // If dropping in the "unscheduled" area, we're removing the schedule
       if (courtId === -1) {
@@ -148,15 +152,23 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
         // Create a date object combining the selected date and time slot
         const [hours, minutes] = timeSlot.split(':').map(Number);
         // Make sure we're working with a clean Date object
-        const scheduledDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hours, minutes, 0, 0);
-        
-        // Format as ISO string for the server
-        const formattedDate = scheduledDate.toISOString();
-        
+        const scheduledDate = new Date(
+          selectedDate.getFullYear(),
+          selectedDate.getMonth(), 
+          selectedDate.getDate(),
+          hours,
+          minutes,
+          0,
+          0
+        );
+
         // Schedule the match
         scheduleMatchMutation.mutate({
           matchId: draggedMatch.id,
-          data: { courtId, scheduledTime: formattedDate }
+          data: { 
+            courtId, 
+            scheduledTime: scheduledDate.toISOString()
+          }
         });
       }
     } catch (error) {
@@ -167,7 +179,7 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
         variant: "destructive"
       });
     }
-    
+
     setDraggedMatch(null);
     setIsDragging(false);
   };
@@ -198,7 +210,7 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
     <div className="w-full">
       <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
         <h2 className="text-2xl font-bold">Schedule</h2>
-        
+
         <div className="flex gap-2 items-center">
           <Select 
             value={selectedDate.toISOString().split('T')[0]} 
@@ -280,7 +292,7 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
               venue.courts?.map((court: any) => {
                 const courtColor = getCourtColor(court.id);
                 const bgColor = hexToRgba(courtColor, 0.15);
-                
+
                 return (
                   <div key={court.id} style={{ backgroundColor: bgColor }}>
                     <div 
@@ -289,13 +301,13 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
                     >
                       {court.name}
                     </div>
-                  
+
                     {timeSlots.map((slot) => {
                       const matchesInSlot = scheduledMatches.filter(
                         (match: any) => match.courtId === court.id && 
                         format(parseISO(match.scheduledTime), "HH:mm") === slot
                       );
-                      
+
                       return (
                         <div
                           key={`${court.id}-${slot}`}
