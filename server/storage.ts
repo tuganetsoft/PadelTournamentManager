@@ -409,38 +409,71 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateMatch(id: number, data: Partial<Match>): Promise<Match> {
-    // Create a processed copy of the data to avoid modifying the original
-    const processedData = { ...data };
+    // Create a copy to avoid modifying the original
+    const processedData: Record<string, any> = {};
     
-    // Process scheduledTime specifically to fix toISOString issue
-    if ('scheduledTime' in processedData) {
-      // If it's null, keep it as null
-      if (processedData.scheduledTime === null) {
-        // Keep as null
-      } 
-      // If it's a string, ensure it's properly formatted but don't try to call toISOString
-      else if (typeof processedData.scheduledTime === 'string') {
-        // The string is already an ISO format, so we don't need to do anything
-        console.log("Using scheduledTime as string directly:", processedData.scheduledTime);
+    // Copy all fields except scheduledTime
+    Object.keys(data).forEach(key => {
+      if (key !== 'scheduledTime') {
+        processedData[key] = data[key as keyof typeof data];
       }
-      // If it's a Date object, convert it to ISO string
-      else if (processedData.scheduledTime instanceof Date) {
-        processedData.scheduledTime = processedData.scheduledTime.toISOString();
-      }
-    }
+    });
     
-    console.log("Final processed data for DB update:", processedData);
-    
-    const result = await db.update(matches)
-      .set(processedData)
-      .where(eq(matches.id, id))
-      .returning();
-    
-    if (result.length === 0) {
+    // Get the existing match
+    const existingMatch = await this.getMatch(id);
+    if (!existingMatch) {
       throw new Error(`Match with ID ${id} not found`);
     }
     
-    return result[0];
+    // Execute a raw SQL query to update the match with proper timestamp handling
+    let updateQuery = 'UPDATE matches SET ';
+    const updateValues: any[] = [];
+    let paramCount = 1;
+    
+    // Add all fields except scheduledTime to the query
+    Object.keys(processedData).forEach((key, index) => {
+      const snakeCaseKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+      updateQuery += `${snakeCaseKey} = $${paramCount}, `;
+      updateValues.push(processedData[key]);
+      paramCount++;
+    });
+    
+    // Add scheduledTime with special handling if it exists in the data
+    if ('scheduledTime' in data) {
+      if (data.scheduledTime === null) {
+        updateQuery += `scheduled_time = NULL, `;
+      } else {
+        try {
+          // If it's a string, use it directly in the query with explicit casting
+          updateQuery += `scheduled_time = $${paramCount}::timestamp with time zone, `;
+          updateValues.push(data.scheduledTime);
+          paramCount++;
+        } catch (err) {
+          console.error("Error processing scheduledTime:", err);
+          throw new Error("Invalid date format for scheduledTime");
+        }
+      }
+    }
+    
+    // Remove trailing comma and space
+    updateQuery = updateQuery.slice(0, -2);
+    
+    // Add WHERE clause and RETURNING
+    updateQuery += ` WHERE id = $${paramCount} RETURNING *`;
+    updateValues.push(id);
+    
+    // Execute the query
+    console.log("Executing raw SQL update:", updateQuery, updateValues);
+    
+    // Use pool directly to execute the query
+    const { pool } = await import('./db');
+    const result = await pool.query(updateQuery, updateValues);
+    
+    if (!result.rows || result.rows.length === 0) {
+      throw new Error(`Failed to update match with ID ${id}`);
+    }
+    
+    return result.rows[0] as Match;
   }
 
   async deleteMatch(id: number): Promise<void> {
