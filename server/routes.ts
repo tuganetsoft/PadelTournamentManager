@@ -1062,7 +1062,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).send("Not authorized to update this match");
       }
       
-      const data = req.body;
+      // Process request data to ensure scheduledTime is properly formatted
+      const data = { ...req.body };
+      
+      // Handle date - ensure it's a valid date string or null
+      if (data.scheduledTime) {
+        try {
+          // If it's already an ISO string, this will just parse and re-format it
+          // If it's some other format, this will attempt to convert it
+          const dateObj = new Date(data.scheduledTime);
+          if (!isNaN(dateObj.getTime())) {
+            data.scheduledTime = dateObj.toISOString();
+          } else {
+            return res.status(400).json({ error: "Invalid date format" });
+          }
+        } catch (err) {
+          return res.status(400).json({ error: "Could not process date format" });
+        }
+      }
+      
       const updatedMatch = await storage.updateMatch(id, data);
       
       // If match is completed and has scores, update group standings
