@@ -409,8 +409,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateMatch(id: number, data: Partial<Match>): Promise<Match> {
+    // Create a processed copy of the data to avoid modifying the original
+    const processedData = { ...data };
+    
+    // Process scheduledTime specifically to fix toISOString issue
+    if ('scheduledTime' in processedData) {
+      // If it's null, keep it as null
+      if (processedData.scheduledTime === null) {
+        // Keep as null
+      } 
+      // If it's a string, ensure it's properly formatted but don't try to call toISOString
+      else if (typeof processedData.scheduledTime === 'string') {
+        // The string is already an ISO format, so we don't need to do anything
+        console.log("Using scheduledTime as string directly:", processedData.scheduledTime);
+      }
+      // If it's a Date object, convert it to ISO string
+      else if (processedData.scheduledTime instanceof Date) {
+        processedData.scheduledTime = processedData.scheduledTime.toISOString();
+      }
+    }
+    
+    console.log("Final processed data for DB update:", processedData);
+    
     const result = await db.update(matches)
-      .set(data)
+      .set(processedData)
       .where(eq(matches.id, id))
       .returning();
     
