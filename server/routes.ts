@@ -1065,19 +1065,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process request data to ensure scheduledTime is properly formatted
       const data = { ...req.body };
       
+      console.log("Original request body:", JSON.stringify(req.body));
+      console.log("scheduledTime type:", typeof data.scheduledTime);
+      
       // Handle date - ensure it's a valid date string or null
       if (data.scheduledTime) {
-        try {
-          // If it's already an ISO string, this will just parse and re-format it
-          // If it's some other format, this will attempt to convert it
-          const dateObj = new Date(data.scheduledTime);
-          if (!isNaN(dateObj.getTime())) {
-            data.scheduledTime = dateObj.toISOString();
-          } else {
-            return res.status(400).json({ error: "Invalid date format" });
+        // Explicitly handle null values
+        if (data.scheduledTime === null) {
+          // Keep it as null
+          console.log("scheduledTime is null, keeping as null");
+        } else {
+          try {
+            console.log("Is Date instance:", data.scheduledTime instanceof Date);
+            console.log("Constructor name:", data.scheduledTime.constructor ? data.scheduledTime.constructor.name : "unknown");
+            
+            // Force to string first if it's not already a string
+            const dateString = typeof data.scheduledTime === 'string' 
+              ? data.scheduledTime 
+              : String(data.scheduledTime);
+            
+            console.log("Date string to parse:", dateString);
+            
+            // Create a fresh Date object
+            const dateObj = new Date(dateString);
+            console.log("Parsed date object:", dateObj);
+            console.log("Date valid:", !isNaN(dateObj.getTime()));
+            
+            if (!isNaN(dateObj.getTime())) {
+              data.scheduledTime = dateObj.toISOString();
+              console.log("Formatted ISO string:", data.scheduledTime);
+            } else {
+              console.log("Invalid date format received");
+              return res.status(400).json({ error: "Invalid date format" });
+            }
+          } catch (err) {
+            console.error("Date processing error:", err);
+            return res.status(400).json({ error: "Could not process date format: " + (err as Error).message });
           }
-        } catch (err) {
-          return res.status(400).json({ error: "Could not process date format" });
         }
       }
       

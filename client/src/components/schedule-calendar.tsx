@@ -1,7 +1,3 @@
-The code modification focuses on fixing the date handling within the handleDrop function in the schedule-calendar.tsx component to resolve the "value.toISOString is not a function" error.
-```
-
-```replit_final_file
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
