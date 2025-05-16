@@ -91,7 +91,7 @@ export const matches = pgTable("matches", {
   scoreB: text("score_b"),
   winner: integer("winner"), // ID of the winning team
   courtId: integer("court_id"), // Optional, set when scheduled
-  scheduledTime: timestamp("scheduled_time"), // Optional, set when scheduled
+  scheduledTime: text("scheduled_time"), // Changed to text to avoid timestamp conversion issues
   completed: boolean("completed").notNull().default(false),
 });
 
