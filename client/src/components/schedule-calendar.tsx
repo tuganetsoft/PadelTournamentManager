@@ -42,7 +42,10 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
   ];
 
   // Extract all matches from all categories
-  const allMatches = tournament?.categories?.flatMap((category: any) => 
+  // Use freshTournamentData if available, otherwise fall back to the passed-in tournament
+  const currentTournament = freshTournamentData || tournament;
+
+  const allMatches = currentTournament?.categories?.flatMap((category: any) => 
     category.matches.map((match: any) => ({
       ...match,
       categoryName: category.name // Add category name for display
@@ -193,14 +196,18 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
       return await res.json();
     },
     onSuccess: async () => {
-      // Invalidate multiple queries to ensure all views are updated
-      await queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournament.id}/details`] });
+      // Force a direct refetch immediately for this component's specific query
+      await queryClient.invalidateQueries({
+        queryKey: [`/api/tournaments/${tournament.id}/details`],
+        refetchType: 'all',
+      });
       
-      // Also invalidate any tournament matches queries 
-      await queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${tournament.id}/matches`] });
-      
-      // Force refetch to update the UI immediately without requiring page refresh
-      await queryClient.refetchQueries({ queryKey: [`/api/tournaments/${tournament.id}/details`] });
+      // More aggressive refetch to ensure UI updates
+      // This will trigger the useQuery we added directly in this component
+      await queryClient.refetchQueries({
+        queryKey: [`/api/tournaments/${tournament.id}/details`],
+        type: 'all',
+      });
       
       toast({
         title: "Match scheduled",
