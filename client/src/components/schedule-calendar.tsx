@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, addDays, isSameDay, parseISO, eachDayOfInterval } from "date-fns";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { MatchCard } from "./match-card";
@@ -18,6 +18,12 @@ type ScheduleCalendarProps = {
 
 export function ScheduleCalendar({ tournament, venues, startDate, endDate }: ScheduleCalendarProps) {
   const { toast } = useToast();
+  
+  // Fetch fresh tournament data directly in this component to ensure up-to-date schedule
+  const { data: freshTournamentData } = useQuery({
+    queryKey: [`/api/tournaments/${tournament.id}/details`],
+    refetchInterval: 2000, // Refetch every 2 seconds when this component is mounted
+  });
   const [selectedDate, setSelectedDate] = useState<Date>(startDate);
   const [draggedMatch, setDraggedMatch] = useState<any | null>(null);
   const [isDragging, setIsDragging] = useState(false);
