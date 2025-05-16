@@ -156,8 +156,10 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
       } else {
         // Create a date object combining the selected date and time slot
         const [hours, minutes] = timeSlot.split(':').map(Number);
-        // Make sure we're working with a clean Date object
-        const scheduledDate = new Date(
+        
+        // Fix timezone issue by using UTC date construction
+        // This ensures the time displayed is the same time stored in the database
+        const scheduledDate = new Date(Date.UTC(
           selectedDate.getFullYear(),
           selectedDate.getMonth(), 
           selectedDate.getDate(),
@@ -165,7 +167,10 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
           minutes,
           0,
           0
-        );
+        ));
+        
+        // Log the scheduled time for verification
+        console.log(`Scheduling match at UI time: ${timeSlot}, UTC time: ${scheduledDate.toISOString()}`);
 
         // Schedule the match
         scheduleMatchMutation.mutate({
