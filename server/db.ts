@@ -17,12 +17,13 @@ const encodedUrl = cleanDatabaseUrl.replace(/#/g, '%23');
 export const pool = new Pool({ 
   connectionString: encodedUrl,
   ssl: {
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
+    requestCert: true,
+    keepAlive: true,
   },
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 30000,
-  max: 20,
-  keepAlive: true
+  max: 20
 });
 
 // Handle pool errors
