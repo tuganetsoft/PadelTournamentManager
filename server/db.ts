@@ -11,9 +11,11 @@ if (!process.env.DATABASE_URL) {
 
 // Clean and validate database URL
 const cleanDatabaseUrl = process.env.DATABASE_URL.trim();
+// Properly encode special characters in the URL
+const encodedUrl = cleanDatabaseUrl.replace(/#/g, '%23');
 
 export const pool = new Pool({ 
-  connectionString: cleanDatabaseUrl,
+  connectionString: encodedUrl,
   ssl: process.env.NODE_ENV === 'production' ? {
     rejectUnauthorized: false
   } : false
