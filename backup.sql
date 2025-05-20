@@ -182,7 +182,7 @@ CREATE TABLE public.matches (
     score_b text,
     winner integer,
     court_id integer,
-    scheduled_time timestamp without time zone,
+    scheduled_time timestamp with time zone,
     completed boolean DEFAULT false NOT NULL
 );
 
@@ -533,23 +533,23 @@ COPY public.groups (id, name, category_id) FROM stdin;
 --
 
 COPY public.matches (id, category_id, team_a_id, team_b_id, group_id, round, score_a, score_b, winner, court_id, scheduled_time, completed) FROM stdin;
-1	1	6	1	1	\N	\N	\N	\N	\N	\N	f
-4	1	1	5	1	\N	\N	\N	\N	\N	\N	f
-5	1	1	4	1	\N	\N	\N	\N	\N	\N	f
-6	1	5	4	1	\N	\N	\N	\N	\N	\N	f
 7	1	7	2	2	\N	\N	\N	\N	\N	\N	f
 8	1	7	3	2	\N	\N	\N	\N	\N	\N	f
 9	1	2	3	2	\N	\N	\N	\N	\N	\N	f
 3	1	6	4	1	\N	\N	\N	\N	\N	\N	f
-2	1	6	5	1	\N	\N	\N	\N	1	2025-05-17 13:00:00	f
+2	1	6	5	1	\N	\N	\N	\N	1	\N	f
+11	3	10	9	4	\N	\N	\N	\N	11	2025-05-24 09:30:00+00	f
 10	3	11	12	3	\N	\N	\N	\N	\N	\N	f
-11	3	10	9	4	\N	\N	\N	\N	\N	\N	f
-13	6	27	24	9	GROUP	\N	\N	\N	\N	\N	f
-14	6	26	24	9	GROUP	\N	\N	\N	\N	\N	f
-15	6	28	25	10	GROUP	\N	\N	\N	\N	\N	f
-16	6	28	23	10	GROUP	\N	\N	\N	\N	\N	f
+16	6	28	23	10	GROUP	\N	\N	\N	13	2025-05-17 11:00:00+00	f
+14	6	26	24	9	GROUP	\N	\N	\N	12	2025-05-17 11:30:00+00	f
+15	6	28	25	10	GROUP	\N	\N	\N	13	2025-05-17 11:30:00+00	f
+4	1	1	5	1	\N	\N	\N	\N	2	2025-05-17 08:30:00+00	f
+6	1	5	4	1	\N	\N	\N	\N	3	2025-05-17 08:30:00+00	f
+5	1	1	4	1	\N	\N	\N	\N	4	2025-05-17 08:30:00+00	f
+1	1	6	1	1	\N	\N	\N	\N	2	2025-05-16 08:30:00+00	f
 17	6	25	23	10	GROUP	\N	\N	\N	\N	\N	f
-12	6	27	26	9	GROUP	\N	\N	\N	\N	\N	f
+12	6	27	26	9	GROUP	\N	\N	\N	12	2025-05-17 10:00:00+00	f
+13	6	27	24	9	GROUP	\N	\N	\N	13	2025-05-17 09:00:00+00	f
 \.
 
 
@@ -558,16 +558,8 @@ COPY public.matches (id, category_id, team_a_id, team_b_id, group_id, round, sco
 --
 
 COPY public.session (sid, sess, expire) FROM stdin;
-WuXxB_5fgLZ5NG5puC3NyNtWzR0gkLVa	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"},"passport":{"user":1}}	2025-05-16 23:29:15
-SFo9qgsnetyEa4GECgZjr2xhyIJiO_Bt	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"}}	2025-05-16 15:13:55
-AqWAyRyeou4pj9iA18d4MT6v_zAsPLg7	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"}}	2025-05-16 15:13:55
-ZvK9x2-gTjWbBRHxsUq8hlm2E0v3kpV7	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"}}	2025-05-16 15:13:55
-oyeGpb821LwCzcymjBsXqsHrsIUjMtxE	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"},"passport":{"user":1}}	2025-05-16 03:29:31
-yPPksl-nXCO9dsT14eMUy4qMXy3_BejS	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"}}	2025-05-16 00:46:36
-ixHq_arX39CxsvOepXiv3yGJbHZO3n18	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"}}	2025-05-16 00:46:36
-a-43pRxaYYESsyNnn4XH_qt3plfY5gCq	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"}}	2025-05-16 00:46:39
-xHaW9Hka4KwLEh-_kpRTiIfn1wfAX3Rt	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"}}	2025-05-16 00:46:39
-0KgaINdaWd3Necx2jzeVHMAzWtL2vnA3	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"},"passport":{"user":1}}	2025-05-16 12:22:44
+xEMS9ZkF9tO8HFmVqSFmVUUvtyC9_ukD	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"},"passport":{"user":1}}	2025-05-19 10:01:56
+KF0fl9XHy_U80OrNTD_2BVOQw7x15cE_	{"cookie":{"originalMaxAge":null,"expires":null,"httpOnly":true,"path":"/"},"passport":{"user":1}}	2025-05-19 00:07:54
 \.
 
 
