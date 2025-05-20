@@ -16,11 +16,12 @@ const encodedUrl = cleanDatabaseUrl.replace(/#/g, '%23');
 
 export const pool = new Pool({ 
   connectionString: encodedUrl,
-  ssl: {
-    rejectUnauthorized: false,
-    requestCert: true,
-    keepAlive: true,
-  },
+  // Make SSL configuration conditional based on environment and connection string
+  ...(process.env.NODE_ENV === 'production' && !encodedUrl.includes('localhost') ? {
+    ssl: {
+      rejectUnauthorized: false
+    }
+  } : {}),
   connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 30000,
   max: 20

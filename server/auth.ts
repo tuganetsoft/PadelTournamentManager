@@ -35,7 +35,9 @@ export function setupAuth(app: Express) {
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      // Only use secure cookies in production when not using localhost
+      secure: process.env.NODE_ENV === 'production' && 
+              !process.env.DATABASE_URL?.includes('localhost'),
       sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
