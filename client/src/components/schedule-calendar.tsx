@@ -22,7 +22,7 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
   // Fetch fresh tournament data directly in this component to ensure up-to-date schedule
   const { data: freshTournamentData } = useQuery({
     queryKey: [`/api/tournaments/${tournament.id}/details`],
-    refetchInterval: 2000, // Refetch every 2 seconds when this component is mounted
+    refetchInterval: 100, // Refetch every 2 seconds when this component is mounted
   });
   const [selectedDate, setSelectedDate] = useState<Date>(startDate);
   const [draggedMatch, setDraggedMatch] = useState<any | null>(null);
