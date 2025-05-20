@@ -17,8 +17,7 @@ const encodedUrl = cleanDatabaseUrl.replace(/#/g, '%23');
 export const pool = new Pool({ 
   connectionString: encodedUrl,
   ssl: {
-    rejectUnauthorized: false,
-    requestCert: true
+    rejectUnauthorized: false
   },
   connectionTimeoutMillis: 5000,
   idleTimeoutMillis: 30000,
