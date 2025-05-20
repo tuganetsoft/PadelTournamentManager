@@ -16,10 +16,20 @@ const encodedUrl = cleanDatabaseUrl.replace(/#/g, '%23');
 
 export const pool = new Pool({ 
   connectionString: encodedUrl,
-  ssl: process.env.NODE_ENV === 'production' ? {
+  ssl: {
     rejectUnauthorized: false,
     requestCert: true
-  } : false
+  },
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 30000,
+  max: 20,
+  keepAlive: true
+});
+
+// Handle pool errors
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
 });
 
 export const db = drizzle(pool, { schema });
