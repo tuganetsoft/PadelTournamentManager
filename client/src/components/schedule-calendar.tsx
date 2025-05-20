@@ -157,22 +157,16 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
         // Capture the display time from UI
         const [hours, minutes] = timeSlot.split(':').map(Number);
         
-        // Get the timezone offset in minutes
-        const timezoneOffsetMinutes = new Date().getTimezoneOffset();
-        
-        // Create a date object with time adjusted for timezone
-        // Explicitly SUBTRACT the timezone offset to counteract the automatic timezone conversion
-        // For example, if user selects 10:00 AM but timezone offset is -60 (UTC+1),
-        // we need to make it 9:00 AM in UTC so it displays correctly at 10:00 AM local time
-        const scheduledDate = new Date(
+        // Create a date object directly in UTC using the selected local time
+        const scheduledDate = new Date(Date.UTC(
           selectedDate.getFullYear(),
           selectedDate.getMonth(), 
           selectedDate.getDate(),
-          hours, 
+          hours,
           minutes,
           0,
           0
-        );
+        ));
         
         // Log for debugging
         console.log(`User selected time: ${timeSlot}`);
