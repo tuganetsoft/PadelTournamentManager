@@ -94,16 +94,7 @@ export function setupAuth(app: Express) {
   });
 
   app.get("/api/user", (req, res) => {
-    // Always return a default user object bypassing authentication
-    if (!req.isAuthenticated()) {
-      // Return the default user without requiring login
-      return res.json({
-        id: 1,
-        username: "default_user",
-        password: "", // Empty password for security reasons
-        // Add any additional properties needed by your user interface
-      });
-    }
+    if (!req.isAuthenticated()) return res.sendStatus(401);
     res.json(req.user);
   });
 }
