@@ -157,8 +157,8 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
         // Capture the display time from UI
         const [hours, minutes] = timeSlot.split(':').map(Number);
         
-        // Create a date object directly in UTC using the selected local time
-        const scheduledDate = new Date(Date.UTC(
+        // Create a date object in local time
+        const scheduledDate = new Date(
           selectedDate.getFullYear(),
           selectedDate.getMonth(), 
           selectedDate.getDate(),
@@ -166,13 +166,11 @@ export function ScheduleCalendar({ tournament, venues, startDate, endDate }: Sch
           minutes,
           0,
           0
-        ));
+        );
         
         // Log for debugging
         console.log(`User selected time: ${timeSlot}`);
-        console.log(`Timezone offset (minutes): ${timezoneOffsetMinutes}`);
-        console.log(`Local date created: ${scheduledDate.toString()}`);
-        console.log(`ISO string for storage: ${scheduledDate.toISOString()}`);
+        console.log(`Date to be stored: ${scheduledDate.toISOString()}`);
 
         // Schedule the match
         scheduleMatchMutation.mutate({
